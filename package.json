@@ -4,7 +4,9 @@
   "description": "Jewish Calendar server-side Node.js for www.hebcal.com",
   "main": "index.js",
   "scripts": {
-    "build": "babel src --out-dir dist",
+    "build": "npm run build:cp-json && npm run build:babel",
+    "build:babel": "babel src --out-dir dist",
+    "build:cp-json": "mkdir -p ./dist && cp ./src/*.json ./dist",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
