@@ -34,6 +34,10 @@ async function main() {
   const subs = await loadSubs(config, []);
   logger.info(`Loaded ${subs.size} users`);
 
+  const alreadySent = loadSentLog();
+  logger.info(`Skipping ${alreadySent.size} users from previous run`);
+  alreadySent.forEach((x) => subs.delete(x));
+
   // open the database
   const lockfile = fs.openSync('/tmp/hebcal-shabbat-weekly.lock', 'w');
   await flock(lockfile, 'ex');
@@ -47,10 +51,8 @@ async function main() {
     filename: 'geonames.sqlite3',
     driver: sqlite3.cached.Database,
   });
-  const result = await zipsDb.get('SELECT CityMixedCase,State,Latitude,Longitude,TimeZone,DayLightSaving FROM ZIPCodes_Primary WHERE ZipCode = ?', '02912');
-  console.log(result);
-  const result2 = await geonamesDb.get('SELECT * FROM geoname WHERE geonameid = ?', 5224151);
-  console.log(result2);
+
+  parseAllConfigs(subs, zipsDb, geonamesDb);
 
   await flock(lockfile, 'un');
   fs.closeSync(lockfile);
@@ -69,6 +71,17 @@ function exitIfYomTov() {
     }
   }
 }
+
+/*
+  '8299621': 0, // Shetland Islands, Scotland
+  '8556393': 0, // unknown
+  '6091104': 0, // North York, Ontario
+*/
+const GEONAMES_MAP = {
+  '6693679': 282926, // Modi'in
+  '5927689': 5927690, // Coquitlam, British Columbia
+  '6049430': 6049429, // Langley, British Columbia
+};
 
 /**
  * @param {Map<string,any>} config
@@ -119,9 +132,12 @@ ${allSql}`;
           if (geonameid) {
             cfg.geonameid = geonameid;
           } else {
-            logger.warn(`Unknown city ${cityName} for id=${cfg.id};email=${email}`);
+            logger.warn(`unknown city=${cityName} for to=${email}, id=${cfg.id}`);
             continue;
           }
+        }
+        if (cfg.geonameid && GEONAMES_MAP[cfg.geonameid]) {
+          cfg.geonameid = GEONAMES_MAP[cfg.geonameid];
         }
         subs.set(email, cfg);
       }
@@ -129,4 +145,193 @@ ${allSql}`;
       return resolve(subs);
     });
   });
+}
+
+/**
+ * @param {Date} d
+ * @return {string}
+ */
+function formatYYYYMMDD(d) {
+  return String(d.getFullYear()).padStart(4, '0') +
+        String(d.getMonth() + 1).padStart(2, '0') +
+        String(d.getDate()).padStart(2, '0');
+}
+
+/**
+ * Reads the previous log and returns any successful email adresses to skip
+ * @return {Set<string>}
+ */
+function loadSentLog() {
+  const d = formatYYYYMMDD(new Date());
+  const sentLogFilename = `/home/hebcal/local/var/log/shabbat-${d}`;
+  const result = new Set();
+  let lines;
+  try {
+    lines = fs.readFileSync(sentLogFilename, 'utf-8').split('\n');
+  } catch (error) {
+    return result; // no previous run to scan
+  }
+  for (const line of lines) {
+    const [, status, to] = line.split(':');
+    if (+status && to) {
+      result.add(to);
+    }
+  }
+  return result;
+}
+
+
+// Zip-Codes.com TimeZone IDs
+//
+// Code  Description
+//  4    Atlantic (GMT -04:00)
+//  5    Eastern (GMT -05:00)
+//  6    Central (GMT -06:00)
+//  7    Mountain (GMT -07:00)
+//  8    Pacific (GMT -08:00)
+//  9    Alaska (GMT -09:00)
+// 10    Hawaii-Aleutian Islands (GMT -10:00)
+// 11    American Samoa (GMT -11:00)
+// 13    Marshall Islands (GMT +12:00)
+// 14    Guam (GMT +10:00)
+// 15    Palau (GMT +9:00)
+const ZIPCODES_TZ_MAP = {
+  '0': 'UTC',
+  '4': 'America/Puerto_Rico',
+  '5': 'America/New_York',
+  '6': 'America/Chicago',
+  '7': 'America/Denver',
+  '8': 'America/Los_Angeles',
+  '9': 'America/Anchorage',
+  '10': 'Pacific/Honolulu',
+  '11': 'Pacific/Pago_Pago',
+  '13': 'Pacific/Funafuti',
+  '14': 'Pacific/Guam',
+  '15': 'Pacific/Palau',
+};
+
+/**
+ * @param {string} state
+ * @param {number} tz
+ * @param {string} dst
+ * @return {string}
+ */
+function getUsaTzid(state, tz, dst) {
+  if (tz == 10 && state == 'AK') {
+    return 'America/Adak';
+  } else if (tz == 7 && state == 'AZ') {
+    return dst == 'Y' ? 'America/Denver' : 'America/Phoenix';
+  } else {
+    return ZIPCODES_TZ_MAP[tz];
+  }
+}
+
+/**
+ * @param {string} name
+ * @param {string} admin1
+ * @param {string} country
+ * @return {string}
+ */
+function geonameCityDescr(name, admin1, country) {
+  if (country == 'United States') country = 'USA';
+  if (country == 'United Kingdom') country = 'UK';
+  let cityDescr = name;
+  if (admin1 && !admin1.startsWith(name) && country != 'Israel') {
+    cityDescr += ', ' + admin1;
+  }
+  if (country) {
+    cityDescr += ', ' + country;
+  }
+  return cityDescr;
+}
+
+const GEONAME_SQL = `SELECT
+  g.name as name,
+  g.asciiname as asciiname,
+  c.country as country,
+  a.asciiname as admin1,
+  g.latitude as latitude,
+  g.longitude as longitude,
+  g.timezone as timezone
+FROM geoname g
+LEFT JOIN country c on g.country = c.iso
+LEFT JOIN admin1 a on g.country||'.'||g.admin1 = a.key
+WHERE g.geonameid = ?
+`;
+
+const ZIPCODE_SQL = `SELECT CityMixedCase,State,Latitude,Longitude,TimeZone,DayLightSaving
+FROM ZIPCodes_Primary WHERE ZipCode = ?`;
+
+/**
+ * Scans subs map and removes invalid entries
+ * @param {string} to
+ * @param {Object} cfg
+ * @param {sqlite3.Database} zipsDb
+ * @param {sqlite3.Database} geonamesDb
+ * @return {boolean}
+ */
+async function parseConfig(to, cfg, zipsDb, geonamesDb) {
+  if (cfg.zip) {
+    const result = await zipsDb.get(ZIPCODE_SQL, cfg.zip);
+    if (!result) {
+      logger.warn(`unknown zipcode=${cfg.zip} for to=${to}, id=${cfg.id}`);
+      return false;
+    } else if (!result.Latitude && !result.Longitude) {
+      logger.warn(`zero lat/long zipcode=${cfg.zip} for to=${to}, id=${cfg.id}`);
+      return false;
+    }
+    cfg.latitude = result.Latitude;
+    cfg.longitude = result.Longitude;
+    cfg.tzid = getUsaTzid(result.State, result.TimeZone, result.DayLightSaving);
+    cfg.il = false;
+    cfg.cityDescr = `${result.CityMixedCase}, ${result.State} ${cfg.zip}`;
+  } else if (cfg.geonameid) {
+    const result = await geonamesDb.get(GEONAME_SQL, cfg.geonameid);
+    if (!result) {
+      logger.warn(`unknown geonameid=${cfg.geonameid} for to=${to}, id=${cfg.id}`);
+      return false;
+    }
+    cfg.latitude = result.latitude;
+    cfg.longitude = result.longitude;
+    cfg.tzid = result.timezone;
+    const country = result.country || '';
+    const admin1 = result.admin1 || '';
+    cfg.cityName = result.name;
+    cfg.cityDescr = geonameCityDescr(result.asciiname, admin1, country);
+    cfg.il = Boolean(country == 'Israel');
+    cfg.jersualem = cfg.il && admin1.startsWith('Jerusalem') && result.name.startsWith('Jerualem');
+  } else {
+    logger.warn(`no geographic key in config for to=${to}, id=${cfg.id}`);
+    return false;
+  }
+
+  if (!cfg.latitude || !cfg.longitude) {
+    logger.warn(`Suspicious zero lat/long for to=${to}, id=${cfg.id}`);
+    return false;
+  } else if (!cfg.tzid) {
+    logger.warn(`Unknown tzid for to=${to}, id=${cfg.id}`);
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Scans subs map and removes invalid entries
+ * @param {Map<string,any>} subs
+ * @param {sqlite3.Database} zipsDb
+ * @param {sqlite3.Database} geonamesDb
+ */
+async function parseAllConfigs(subs, zipsDb, geonamesDb) {
+  logger.info('Parsing all configs');
+  const failures = [];
+  for (const [to, cfg] of subs.entries()) {
+    if (!parseConfig(to, cfg, zipsDb, geonamesDb)) {
+      failures.push(to);
+    }
+  }
+  failures.forEach((x) => subs.delete(to));
+  if (failures.length) {
+    logger.warn(`Skipped ${failures.length} subscribers due to config failures`);
+  }
 }
