@@ -29,11 +29,14 @@
     "eslint-config-google": "^0.14.0"
   },
   "dependencies": {
-    "@hebcal/core": "^1.0.11",
+    "@hebcal/core": "^1.0.12",
     "@hebcal/icalendar": "^1.0.0",
     "@hebcal/leyning": "^1.0.5",
+    "fs-ext": "^2.0.0",
     "ini": "^1.3.5",
     "mysql": "^2.18.1",
+    "pino": "^6.3.2",
+    "pino-pretty": "^4.0.0",
     "sqlite": "^4.0.10",
     "sqlite3": "^4.2.0"
   }
