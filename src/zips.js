@@ -52,9 +52,6 @@ async function main() {
   cfgs.sort((a, b) => {
     if (a.longitude == b.longitude) {
       if (a.latitude == b.latitude) {
-        if (!a.cityDescr) {
-          logger.error(a);
-        }
         return a.cityDescr.localeCompare(b.cityDescr);
       } else {
         return a.latitude - b.latitude;
@@ -63,14 +60,8 @@ async function main() {
       return b.longitude - a.longitude;
     }
   });
-  console.log(cfgs[0]);
-  console.log(cfgs[100]);
-  console.log(cfgs[1000]);
-  console.log(cfgs[10000]);
-  console.log(cfgs[cfgs.length - 1]);
 
   logger.info(`About to mail ${cfgs.length} users`);
-
 
   await flock(lockfile, 'un');
   fs.closeSync(lockfile);
