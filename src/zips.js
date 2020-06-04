@@ -1,5 +1,4 @@
-import sqlite3 from 'sqlite3';
-import {open} from 'sqlite';
+import Database from 'better-sqlite3';
 import fs from 'fs';
 import ini from 'ini';
 import {flags, HDate, holidays} from '@hebcal/core';
@@ -15,8 +14,6 @@ const logger = pino({
 logger.info('hello world');
 
 exitIfYomTov();
-
-sqlite3.verbose();
 
 main()
     .then(() => {
@@ -41,18 +38,39 @@ async function main() {
   // open the database
   const lockfile = fs.openSync('/tmp/hebcal-shabbat-weekly.lock', 'w');
   await flock(lockfile, 'ex');
+
   logger.info('Opening ZIP code database...');
-  const zipsDb = await open({
-    filename: 'zips.sqlite3',
-    driver: sqlite3.cached.Database,
-  });
+  const zipsDb = new Database('zips.sqlite3', {fileMustExist: true});
+
   logger.info('Opening GeoNames database...');
-  const geonamesDb = await open({
-    filename: 'geonames.sqlite3',
-    driver: sqlite3.cached.Database,
-  });
+  const geonamesDb = new Database('geonames.sqlite3', {fileMustExist: true});
 
   parseAllConfigs(subs, zipsDb, geonamesDb);
+
+  logger.info(`Sorting ${subs.size} users by lat/long`);
+  const cfgs = Array.from(subs.values());
+  cfgs.sort((a, b) => {
+    if (a.longitude == b.longitude) {
+      if (a.latitude == b.latitude) {
+        if (!a.cityDescr) {
+          logger.error(a);
+        }
+        return a.cityDescr.localeCompare(b.cityDescr);
+      } else {
+        return a.latitude - b.latitude;
+      }
+    } else {
+      return b.longitude - a.longitude;
+    }
+  });
+  console.log(cfgs[0]);
+  console.log(cfgs[100]);
+  console.log(cfgs[1000]);
+  console.log(cfgs[10000]);
+  console.log(cfgs[cfgs.length - 1]);
+
+  logger.info(`About to mail ${cfgs.length} users`);
+
 
   await flock(lockfile, 'un');
   fs.closeSync(lockfile);
@@ -120,6 +138,7 @@ ${allSql}`;
         const email = row.email_address;
         const cfg = {
           id: row.email_id,
+          email: email,
           m: row.email_candles_havdalah,
         };
         if (row.email_candles_zipcode) {
@@ -266,13 +285,13 @@ FROM ZIPCodes_Primary WHERE ZipCode = ?`;
  * Scans subs map and removes invalid entries
  * @param {string} to
  * @param {Object} cfg
- * @param {sqlite3.Database} zipsDb
- * @param {sqlite3.Database} geonamesDb
+ * @param {*} zipStmt
+ * @param {*} geonamesStmt
  * @return {boolean}
  */
-async function parseConfig(to, cfg, zipsDb, geonamesDb) {
+function parseConfig(to, cfg, zipStmt, geonamesStmt) {
   if (cfg.zip) {
-    const result = await zipsDb.get(ZIPCODE_SQL, cfg.zip);
+    const result = zipStmt.get(cfg.zip);
     if (!result) {
       logger.warn(`unknown zipcode=${cfg.zip} for to=${to}, id=${cfg.id}`);
       return false;
@@ -286,7 +305,7 @@ async function parseConfig(to, cfg, zipsDb, geonamesDb) {
     cfg.il = false;
     cfg.cityDescr = `${result.CityMixedCase}, ${result.State} ${cfg.zip}`;
   } else if (cfg.geonameid) {
-    const result = await geonamesDb.get(GEONAME_SQL, cfg.geonameid);
+    const result = geonamesStmt.get(cfg.geonameid);
     if (!result) {
       logger.warn(`unknown geonameid=${cfg.geonameid} for to=${to}, id=${cfg.id}`);
       return false;
@@ -298,8 +317,12 @@ async function parseConfig(to, cfg, zipsDb, geonamesDb) {
     const admin1 = result.admin1 || '';
     cfg.cityName = result.name;
     cfg.cityDescr = geonameCityDescr(result.asciiname, admin1, country);
-    cfg.il = Boolean(country == 'Israel');
-    cfg.jersualem = cfg.il && admin1.startsWith('Jerusalem') && result.name.startsWith('Jerualem');
+    if (country == 'Israel') {
+      cfg.il = true;
+      if (admin1.startsWith('Jerusalem') && result.name.startsWith('Jerualem')) {
+        cfg.jersualem = true;
+      }
+    }
   } else {
     logger.warn(`no geographic key in config for to=${to}, id=${cfg.id}`);
     return false;
@@ -319,18 +342,20 @@ async function parseConfig(to, cfg, zipsDb, geonamesDb) {
 /**
  * Scans subs map and removes invalid entries
  * @param {Map<string,any>} subs
- * @param {sqlite3.Database} zipsDb
- * @param {sqlite3.Database} geonamesDb
+ * @param {*} zipsDb
+ * @param {*} geonamesDb
  */
-async function parseAllConfigs(subs, zipsDb, geonamesDb) {
+function parseAllConfigs(subs, zipsDb, geonamesDb) {
   logger.info('Parsing all configs');
+  const zipStmt = zipsDb.prepare(ZIPCODE_SQL);
+  const geonamesStmt = geonamesDb.prepare(GEONAME_SQL);
   const failures = [];
   for (const [to, cfg] of subs.entries()) {
-    if (!parseConfig(to, cfg, zipsDb, geonamesDb)) {
+    if (!parseConfig(to, cfg, zipStmt, geonamesStmt)) {
       failures.push(to);
     }
   }
-  failures.forEach((x) => subs.delete(to));
+  failures.forEach((x) => subs.delete(x));
   if (failures.length) {
     logger.warn(`Skipped ${failures.length} subscribers due to config failures`);
   }
