@@ -1,0 +1,40 @@
+{
+  "name": "hebcal-nodejs",
+  "version": "1.0.0",
+  "description": "Jewish Calendar server-side Node.js for www.hebcal.com",
+  "main": "index.js",
+  "scripts": {
+    "build": "babel src --out-dir dist",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mjradwin/hebcal-nodejs.git"
+  },
+  "keywords": [
+    "hebcal"
+  ],
+  "author": "Michael J. Radwin (https://github.com/mjradwin)",
+  "license": "BSD-2-Clause",
+  "bugs": {
+    "url": "https://github.com/mjradwin/hebcal-nodejs/issues"
+  },
+  "homepage": "https://github.com/mjradwin/hebcal-nodejs#readme",
+  "devDependencies": {
+    "@babel/cli": "^7.10.1",
+    "@babel/core": "^7.9.6",
+    "@babel/preset-env": "^7.9.6",
+    "@babel/register": "^7.10.1",
+    "eslint": "^7.1.0",
+    "eslint-config-google": "^0.14.0"
+  },
+  "dependencies": {
+    "@hebcal/core": "^1.0.11",
+    "@hebcal/icalendar": "^1.0.0",
+    "@hebcal/leyning": "^1.0.5",
+    "ini": "^1.3.5",
+    "mysql": "^2.18.1",
+    "sqlite": "^4.0.10",
+    "sqlite3": "^4.2.0"
+  }
+}
