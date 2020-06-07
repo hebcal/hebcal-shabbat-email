@@ -1,11 +1,17 @@
 import Database from 'better-sqlite3';
+import dayjs from 'dayjs';
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import fs from 'fs';
 import ini from 'ini';
-import {flags, HDate, holidays} from '@hebcal/core';
+import {flags, HDate, Event, holidays, hebcal, Location} from '@hebcal/core';
 import pino from 'pino';
 import {flock} from 'fs-ext';
 import mysql from 'mysql';
 const city2geonameid = require('./city2geonameid.json');
+
+dayjs.extend(isSameOrBefore);
+dayjs.extend(isSameOrAfter);
 
 const logger = pino({
   prettyPrint: {translateTime: true},
@@ -13,19 +19,27 @@ const logger = pino({
 
 logger.info('hello world');
 
-exitIfYomTov();
+const TODAY = new Date();
+exitIfYomTov(TODAY);
+const [midnight, endOfWeek] = getStartAndEndMillis(TODAY);
 
-main()
+const UTM_PARAM = 'utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=shabbat-' +
+  dayjs(TODAY).format('YYYY-MM-DD');
+
+main(100)
     .then(() => {
-      logger.info('Done!');
+      logger.info('Success!');
     })
     .catch((err) => {
       logger.fatal(err);
       process.exit(1);
     });
 
-/** main loop */
-async function main() {
+/**
+ * Main event loop
+ * @param {number} [sleepMillis] time to sleep between messages in milliseconds
+ */
+async function main(sleepMillis=300) {
   logger.info('Reading config.ini...');
   const config = ini.parse(fs.readFileSync('./config.ini', 'utf-8'));
   const subs = await loadSubs(config, []);
@@ -47,6 +61,9 @@ async function main() {
 
   parseAllConfigs(subs, zipsDb, geonamesDb);
 
+  zipsDb.close();
+  geonamesDb.close();
+
   logger.info(`Sorting ${subs.size} users by lat/long`);
   const cfgs = Array.from(subs.values());
   cfgs.sort((a, b) => {
@@ -61,15 +78,54 @@ async function main() {
     }
   });
 
-  logger.info(`About to mail ${cfgs.length} users`);
+  const count = cfgs.length;
+  logger.info(`About to mail ${count} users`);
+  let i = 0;
+  for (const cfg of cfgs) {
+    if ((i % 200 == 0) || i == count - 1) {
+      logger.info(`Sending mail #${i+1}/${count} (${cfg.cityDescr})`);
+    }
+    mailUser(cfg);
+    if (sleepMillis && i != count - 1) {
+      msleep(sleepMillis);
+    }
+    i++;
+  }
+  logger.info(`Sent ${count} messages`);
 
   await flock(lockfile, 'un');
   fs.closeSync(lockfile);
 }
 
-/** Bails out if today is a holiday */
-function exitIfYomTov() {
-  const today = holidays.getHolidaysOnDate(new HDate());
+
+/**
+ * Gets start and end days for filtering relevant hebcal events
+ * @param {Date} now
+ * @return {dayjs.Dayjs[]}
+ */
+function getStartAndEndMillis(now) {
+  const midnight = dayjs(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  const dow = midnight.day();
+  const saturday = midnight.add(6 - dow, 'day');
+  const fiveDaysAhead = midnight.add(5, 'day');
+  const endOfWeek = fiveDaysAhead.isAfter(saturday) ? fiveDaysAhead : saturday;
+  return [midnight, endOfWeek];
+}
+
+/**
+ * sleep for n miliseconds
+ * @param {number} n
+ */
+function msleep(n) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, n);
+}
+
+/**
+ * Bails out if today is a holiday
+ * @param {Date} d
+ */
+function exitIfYomTov(d) {
+  const today = holidays.getHolidaysOnDate(new HDate(d));
   if (today) {
     for (const ev of today) {
       if (ev.getFlags() & flags.CHAG) {
@@ -79,6 +135,175 @@ function exitIfYomTov() {
       }
     }
   }
+}
+
+const locationCache = new Map();
+
+/**
+ * mails the user
+ * @param {any} cfg
+ */
+function mailUser(cfg) {
+  const message = getMessage(cfg);
+  if (cfg.cc == 'RU') {
+    logger.info(message);
+  }
+}
+
+/**
+ * creates a message object
+ * @param {any} cfg
+ * @return {any}
+ */
+function getMessage(cfg) {
+  const [subj, body0, htmlBody0] = getSubjectAndBody(cfg);
+
+  const encoded = encodeURIComponent(Buffer.from(cfg.email).toString('base64'));
+  const unsubUrl = `https://www.hebcal.com/email/?e=${encoded}`;
+
+  const body = body0 + `
+These times are for ${cfg.cityDescr}.
+
+Shabbat Shalom,
+hebcal.com
+
+To modify your subscription or to unsubscribe completely, visit:
+${unsubUrl}
+`;
+
+  const htmlBody = `<!DOCTYPE html><html><head><title>Hebcal Shabbat Times</title></head>
+<body>
+<div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
+${htmlBody0}
+<div style="font-size:16px">
+<div>These times are for ${cfg.cityDescr}.</div>
+${BLANK}
+<div>Shabbat Shalom!</div>
+${BLANK}
+</div>
+</div>
+<div style="font-size:11px;color:#999;font-family:arial,helvetica,sans-serif">
+<div>This email was sent to ${cfg.email} by <a href="https://www.hebcal.com/?${UTM_PARAM}">Hebcal.com</a></div>
+${BLANK}
+<div><a href="${unsubUrl}&amp;unsubscribe=1&amp;${UTM_PARAM}">Unsubscribe</a> | <a href="${unsubUrl}&amp;modify=1&amp;${UTM_PARAM}">Update Settings</a> | <a href="https://www.hebcal.com/home/about/privacy-policy?${UTM_PARAM}">Privacy Policy</a></div>
+</div>
+</body></html>
+`;
+
+  const msgid = cfg.id + '.' + new Date().getTime();
+  const unsubAddr = `shabbat-unsubscribe+${cfg.id}@hebcal.com`;
+  const returnPath = 'shabbat-return+' + cfg.email.replace('@', '=') + '@hebcal.com';
+  const message = {
+    from: 'Hebcal <shabbat-owner@hebcal.com>',
+    replyTo: 'no-reply@hebcal.com',
+    to: cfg.email,
+    subject: subj,
+    messageId: `<${msgid}@hebcal.com>`,
+    headers: {
+      'Return-Path': returnPath,
+      'Errors-To': returnPath,
+      'List-Unsubscribe': `<mailto:${unsubAddr}>`,
+      'List-Id': '<shabbat.hebcal.com>',
+    },
+    text: body,
+    html: htmlBody,
+  };
+  return message;
+}
+
+/**
+ * looks up or generates subject and body
+ * @param {any} cfg
+ * @return {string[]}
+ */
+function getSubjectAndBody(cfg) {
+  const cacheKey = cfg.zip ? `z${cfg.zip}` : `g${cfg.geonameid}`;
+  const cached = locationCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const comma = cfg.cityDescr.indexOf(',');
+  const shortLocation = comma == -1 ? cfg.cityDescr : cfg.cityDescr.substring(0, comma);
+  const location = new Location(cfg.latitude, cfg.longitude, cfg.il, cfg.tzid,
+      cfg.cityName, cfg.cc, cfg.zip || cfg.geonameid);
+  const options = {
+    year: TODAY.getFullYear(),
+    isHebrewYear: false,
+    numYears: TODAY.getMonth() == 11 ? 2 : 1,
+    location: location,
+    candlelighting: true,
+    havdalahMins: cfg.m,
+    il: cfg.il,
+    sedrot: true,
+  };
+  const events = hebcal.hebrewCalendar(options);
+  const subjAndBody = genSubjectAndBody(events, options, shortLocation);
+  locationCache.set(cacheKey, subjAndBody);
+  return subjAndBody;
+}
+
+const BLANK = '<div>&nbsp;</div>\n';
+
+/**
+ * @param {Event[]} events
+ * @param {hebcal.HebcalOptions} options
+ * @param {string} shortLocation
+ * @return {string[]}
+ */
+function genSubjectAndBody(events, options, shortLocation) {
+  events = events.filter((e) => {
+    const dt = dayjs(e.getDate().greg());
+    if (dt.isSameOrAfter(midnight) && dt.isSameOrBefore(endOfWeek)) {
+      e.getAttrs().dt = dt;
+      return true;
+    } else {
+      return false;
+    }
+  });
+  let body = '';
+  let htmlBody = '';
+  let firstCandles;
+  let sedra;
+  const holidaySeen = {};
+  for (const ev of events) {
+    const desc = ev.getDesc();
+    const dt = ev.getAttrs().dt;
+    const mask = ev.getFlags();
+    const attrs = ev.getAttrs();
+    const strtime = dt.format('dddd, MMMM DD');
+    if (desc == 'Candle lighting' || desc == 'Havdalah') {
+      const hourMin = hebcal.reformatTimeStr(attrs.eventTimeStr, 'pm', options);
+      if (!firstCandles && desc == 'Candle lighting') {
+        firstCandles = hourMin;
+      }
+      body += `${desc} is at ${hourMin} on ${strtime}\n`;
+      htmlBody += `<div>${desc} is at <strong>${hourMin}</strong> on ${strtime}.</div>\n${BLANK}`;
+    } else if (mask == flags.PARSHA_HASHAVUA) {
+      sedra = desc.substring(desc.indexOf(' ') + 1);
+      body += `This week's Torah portion is ${desc}\n`;
+      const url = hebcal.getEventUrl(ev);
+      body += `  ${url}\n`;
+      htmlBody += `<div>This week's Torah portion is <a href="${url}?${UTM_PARAM}">${desc}</a>.</div>\n${BLANK}`;
+    } else {
+      const dow = dt.day();
+      if (dow == 6 && !sedra && (mask & flags.CHAG || attrs.cholHaMoedDay)) {
+        sedra = hebcal.getHolidayBasename(desc);
+      }
+      body += `${desc} occurs on ${strtime}\n`;
+      const url = hebcal.getEventUrl(ev);
+      if (url && !holidaySeen[url]) {
+        body += `  ${url}\n`;
+        holidaySeen[url] = true;
+      }
+      htmlBody += `<div><a href="${url}?${UTM_PARAM}">${desc}</a> occurs on ${strtime}.</div>\n${BLANK}`;
+    }
+  }
+  let subject = '[shabbat]';
+  if (sedra) subject += ` ${sedra} -`;
+  subject += ' ' + shortLocation;
+  if (firstCandles) subject += ` candles ${firstCandles}`;
+
+  return [subject, body, htmlBody];
 }
 
 /*
@@ -258,6 +483,7 @@ function geonameCityDescr(name, admin1, country) {
 const GEONAME_SQL = `SELECT
   g.name as name,
   g.asciiname as asciiname,
+  g.country as cc,
   c.country as country,
   a.asciiname as admin1,
   g.latitude as latitude,
@@ -293,6 +519,7 @@ function parseConfig(to, cfg, zipStmt, geonamesStmt) {
     cfg.latitude = result.Latitude;
     cfg.longitude = result.Longitude;
     cfg.tzid = getUsaTzid(result.State, result.TimeZone, result.DayLightSaving);
+    cfg.cc = 'US';
     cfg.il = false;
     cfg.cityDescr = `${result.CityMixedCase}, ${result.State} ${cfg.zip}`;
   } else if (cfg.geonameid) {
@@ -304,6 +531,7 @@ function parseConfig(to, cfg, zipStmt, geonamesStmt) {
     cfg.latitude = result.latitude;
     cfg.longitude = result.longitude;
     cfg.tzid = result.timezone;
+    cfg.cc = result.cc;
     const country = result.country || '';
     const admin1 = result.admin1 || '';
     cfg.cityName = result.name;
@@ -346,8 +574,8 @@ function parseAllConfigs(subs, zipsDb, geonamesDb) {
       failures.push(to);
     }
   }
-  failures.forEach((x) => subs.delete(x));
   if (failures.length) {
+    failures.forEach((x) => subs.delete(x));
     logger.warn(`Skipped ${failures.length} subscribers due to config failures`);
   }
 }
