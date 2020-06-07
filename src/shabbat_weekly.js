@@ -85,9 +85,17 @@ async function main(sleepMillis=300) {
 
   // create reusable transporter object using the default SMTP transport
   const transporter = nodemailer.createTransport({
-    host: 'localhost',
-    port: 25,
-    secure: false,
+    host: config['hebcal.email.shabbat.host'],
+    port: 465,
+    secure: true,
+    auth: {
+      user: config['hebcal.email.shabbat.user'],
+      pass: config['hebcal.email.shabbat.password'],
+    },
+    tls: {
+      // do not fail on invalid certs
+      rejectUnauthorized: false,
+    },
   });
   const logStream = fs.createWriteStream(sentLogFilename, {flags: 'a'});
   const count = cfgs.length;
@@ -98,9 +106,7 @@ async function main(sleepMillis=300) {
       logger.info(`Sending mail #${i+1}/${count} (${cfg.cityDescr})`);
     }
     const info = await mailUser(transporter, cfg);
-    logger.info(`Message sent: ${info.messageId}`);
     writeLogLine(logStream, cfg, info);
-    fs.write(sentLogFd, '');
     if (sleepMillis && i != count - 1) {
       msleep(sleepMillis);
     }
@@ -120,7 +126,9 @@ async function main(sleepMillis=300) {
  */
 function writeLogLine(logStream, cfg, info) {
   const location = cfg.zip || cfg.geonameid;
-  logStream.write(`${info.messageId}:1:${cfg.email}:${location}\n`);
+  const mid = info.messageId.substring(1, info.messageId.indexOf('@'));
+  const status = Number(info.response.startsWith('250'));
+  logStream.write(`${mid}:${status}:${cfg.email}:${location}\n`);
 }
 
 /**
