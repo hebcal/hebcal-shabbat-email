@@ -8,6 +8,7 @@ import {flags, HDate, Event, holidays, hebcal, Location} from '@hebcal/core';
 import pino from 'pino';
 import {flock} from 'fs-ext';
 import mysql from 'mysql';
+import nodemailer from 'nodemailer';
 const city2geonameid = require('./city2geonameid.json');
 
 dayjs.extend(isSameOrBefore);
@@ -42,10 +43,14 @@ main(100)
 async function main(sleepMillis=300) {
   logger.info('Reading config.ini...');
   const config = ini.parse(fs.readFileSync('./config.ini', 'utf-8'));
-  const subs = await loadSubs(config, []);
+  const subs = await loadSubs(config, process.argv.slice(2));
   logger.info(`Loaded ${subs.size} users`);
 
-  const alreadySent = loadSentLog();
+  const d = formatYYYYMMDD(new Date());
+  // const sentLogFilename = `/home/hebcal/local/var/log/shabbat-${d}`;
+  const sentLogFilename = `./shabbat-${d}`;
+
+  const alreadySent = loadSentLog(sentLogFilename);
   logger.info(`Skipping ${alreadySent.size} users from previous run`);
   alreadySent.forEach((x) => subs.delete(x));
 
@@ -78,6 +83,13 @@ async function main(sleepMillis=300) {
     }
   });
 
+  // create reusable transporter object using the default SMTP transport
+  const transporter = nodemailer.createTransport({
+    host: 'localhost',
+    port: 25,
+    secure: false,
+  });
+  const logStream = fs.createWriteStream(sentLogFilename, {flags: 'a'});
   const count = cfgs.length;
   logger.info(`About to mail ${count} users`);
   let i = 0;
@@ -85,18 +97,31 @@ async function main(sleepMillis=300) {
     if ((i % 200 == 0) || i == count - 1) {
       logger.info(`Sending mail #${i+1}/${count} (${cfg.cityDescr})`);
     }
-    mailUser(cfg);
+    const info = await mailUser(transporter, cfg);
+    logger.info(`Message sent: ${info.messageId}`);
+    writeLogLine(logStream, cfg, info);
+    fs.write(sentLogFd, '');
     if (sleepMillis && i != count - 1) {
       msleep(sleepMillis);
     }
     i++;
   }
   logger.info(`Sent ${count} messages`);
+  logStream.close();
 
   await flock(lockfile, 'un');
   fs.closeSync(lockfile);
 }
 
+/**
+ * @param {fs.WriteStream} logStream
+ * @param {Object} cfg
+ * @param {Object} info
+ */
+function writeLogLine(logStream, cfg, info) {
+  const location = cfg.zip || cfg.geonameid;
+  logStream.write(`${info.messageId}:1:${cfg.email}:${location}\n`);
+}
 
 /**
  * Gets start and end days for filtering relevant hebcal events
@@ -141,13 +166,16 @@ const locationCache = new Map();
 
 /**
  * mails the user
+ * @param {nodemailer.Mail} transporter
  * @param {any} cfg
+ * @return {Object}
  */
-function mailUser(cfg) {
+function mailUser(transporter, cfg) {
   const message = getMessage(cfg);
   if (cfg.cc == 'RU') {
     logger.info(message);
   }
+  return transporter.sendMail(message);
 }
 
 /**
@@ -329,7 +357,10 @@ async function loadSubs(config, addrs) {
     database: config['hebcal.mysql.dbname'],
   });
   connection.connect(function(err) {
-    if (err) throw err;
+    if (err) {
+      logger.fatal(err);
+      throw err;
+    }
     logger.debug('connected as id ' + connection.threadId);
   });
   const allSql = addrs && addrs.length ?
@@ -394,11 +425,10 @@ function formatYYYYMMDD(d) {
 
 /**
  * Reads the previous log and returns any successful email adresses to skip
+ * @param {string} sentLogFilename
  * @return {Set<string>}
  */
-function loadSentLog() {
-  const d = formatYYYYMMDD(new Date());
-  const sentLogFilename = `/home/hebcal/local/var/log/shabbat-${d}`;
+function loadSentLog(sentLogFilename) {
   const result = new Set();
   let lines;
   try {
