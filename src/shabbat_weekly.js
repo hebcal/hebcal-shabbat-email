@@ -119,7 +119,7 @@ async function main(sleepMillis=300) {
     i++;
   }
   logger.info(`Sent ${count} messages`);
-  logStream.close();
+  logStream.end();
 
   await flock(lockfile, 'un');
   fs.closeSync(lockfile);
