@@ -9,13 +9,16 @@ import pino from 'pino';
 import {flock} from 'fs-ext';
 import mysql from 'mysql';
 import nodemailer from 'nodemailer';
+import minimist from 'minimist';
 const city2geonameid = require('./city2geonameid.json');
+
+const argv = minimist(process.argv.slice(2));
 
 dayjs.extend(isSameOrBefore);
 dayjs.extend(isSameOrAfter);
 
 const logger = pino({
-  prettyPrint: {translateTime: true},
+  prettyPrint: {translateTime: true, ignore: 'pid,hostname'},
 });
 
 logger.info('hello world');
@@ -27,7 +30,7 @@ const [midnight, endOfWeek] = getStartAndEndMillis(TODAY);
 const UTM_PARAM = 'utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=shabbat-' +
   dayjs(TODAY).format('YYYY-MM-DD');
 
-main(100)
+main(argv.sleeptime)
     .then(() => {
       logger.info('Success!');
     })
@@ -41,9 +44,10 @@ main(100)
  * @param {number} [sleepMillis] time to sleep between messages in milliseconds
  */
 async function main(sleepMillis=300) {
-  logger.info('Reading config.ini...');
-  const config = ini.parse(fs.readFileSync('./config.ini', 'utf-8'));
-  const subs = await loadSubs(config, process.argv.slice(2));
+  const iniPath = argv.ini || '/home/hebcal/local/bin/hebcal-dot-com.ini';
+  logger.info(`Reading ${iniPath}...`);
+  const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
+  const subs = await loadSubs(config, argv._);
   logger.info(`Loaded ${subs.size} users`);
 
   const d = formatYYYYMMDD(new Date());
@@ -106,7 +110,9 @@ async function main(sleepMillis=300) {
       logger.info(`Sending mail #${i+1}/${count} (${cfg.cityDescr})`);
     }
     const info = await mailUser(transporter, cfg);
-    writeLogLine(logStream, cfg, info);
+    if (!argv.dryrun) {
+      writeLogLine(logStream, cfg, info);
+    }
     if (sleepMillis && i != count - 1) {
       msleep(sleepMillis);
     }
@@ -180,6 +186,9 @@ const locationCache = new Map();
  */
 function mailUser(transporter, cfg) {
   const message = getMessage(cfg);
+  if (argv.dryrun) {
+    return undefined;
+  }
   if (cfg.cc == 'RU') {
     logger.info(message);
   }
