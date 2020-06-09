@@ -230,7 +230,9 @@ ${BLANK}
 <div style="font-size:11px;color:#999;font-family:arial,helvetica,sans-serif">
 <div>This email was sent to ${cfg.email} by <a href="https://www.hebcal.com/?${UTM_PARAM}">Hebcal.com</a></div>
 ${BLANK}
-<div><a href="${unsubUrl}&amp;unsubscribe=1&amp;${UTM_PARAM}">Unsubscribe</a> | <a href="${unsubUrl}&amp;modify=1&amp;${UTM_PARAM}">Update Settings</a> | <a href="https://www.hebcal.com/home/about/privacy-policy?${UTM_PARAM}">Privacy Policy</a></div>
+<div><a href="${unsubUrl}&amp;unsubscribe=1&amp;${UTM_PARAM}">Unsubscribe</a> |
+ <a href="${unsubUrl}&amp;modify=1&amp;${UTM_PARAM}">Update Settings</a> |
+ <a href="https://www.hebcal.com/home/about/privacy-policy?${UTM_PARAM}">Privacy Policy</a></div>
 </div>
 </body></html>
 `;
@@ -287,7 +289,7 @@ function getSubjectAndBody(cfg) {
   return subjAndBody;
 }
 
-const BLANK = '<div>&nbsp;</div>\n';
+const BLANK = '<div>&nbsp;</div>';
 
 /**
  * @param {Event[]} events
