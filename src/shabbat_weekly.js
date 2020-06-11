@@ -13,6 +13,12 @@ import minimist from 'minimist';
 const city2geonameid = require('./city2geonameid.json');
 
 const argv = minimist(process.argv.slice(2));
+if (argv.help || argv.h) {
+  usage();
+  process.exit(1);
+}
+// allow sleeptime=0 for no sleep
+argv.sleeptime = typeof argv.sleeptime == 'undefined' ? 300 : +argv.sleeptime;
 
 dayjs.extend(isSameOrBefore);
 dayjs.extend(isSameOrAfter);
@@ -41,9 +47,9 @@ main(argv.sleeptime)
 
 /**
  * Main event loop
- * @param {number} [sleepMillis] time to sleep between messages in milliseconds
+ * @param {number} sleepMillis time to sleep between messages in milliseconds
  */
-async function main(sleepMillis=300) {
+async function main(sleepMillis) {
   const iniPath = argv.ini || '/home/hebcal/local/bin/hebcal-dot-com.ini';
   logger.info(`Reading ${iniPath}...`);
   const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
@@ -51,8 +57,7 @@ async function main(sleepMillis=300) {
   logger.info(`Loaded ${subs.size} users`);
 
   const d = formatYYYYMMDD(new Date());
-  // const sentLogFilename = `/home/hebcal/local/var/log/shabbat-${d}`;
-  const sentLogFilename = `./shabbat-${d}`;
+  const sentLogFilename = `/home/hebcal/local/var/log/shabbat-${d}`;
 
   const alreadySent = loadSentLog(sentLogFilename);
   logger.info(`Skipping ${alreadySent.size} users from previous run`);
@@ -627,4 +632,19 @@ function parseAllConfigs(subs, zipsDb, geonamesDb) {
     failures.forEach((x) => subs.delete(x));
     logger.warn(`Skipped ${failures.length} subscribers due to config failures`);
   }
+}
+
+// eslint-disable-next-line require-jsdoc
+function usage() {
+  const PROG = 'shabbat_weekly.js';
+  const usage = `Usage:
+    ${PROG} [options] [email_address...]
+
+Options:
+  --help           Help
+  --dryrun         Prints the actions that ${PROG} would take
+                     but does not remove anything
+  --sleeptime <n>  Sleep <n> milliseconds between email (default 300)
+`;
+  console.log(usage);
 }

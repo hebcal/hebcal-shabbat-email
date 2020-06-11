@@ -10,7 +10,7 @@ const COUNT_DEFAULT = 7;
 const REASONS_DEFAULT = 'amzn_abuse,user_unknown,user_disabled,domain_error,spam';
 
 const argv = minimist(process.argv.slice(2));
-if (argv.help) {
+if (argv.help || argv.h) {
   usage();
   process.exit(1);
 }
@@ -73,7 +73,7 @@ async function deactivateSubs(connection, addrs) {
   });
   const p3 = new Promise((resolve, reject) => {
     const subsPath = '/home/hebcal/local/var/log/subscribers.log';
-    const t = new Date().getTime() / 1000;
+    const t = Math.floor(new Date().getTime() / 1000);
     const logStream = fs.createWriteStream(subsPath, {flags: 'a'});
     addrs.forEach((addr) => logStream.write(`status=1 to=${addr} code=bounce time=${t}\n`));
     logStream.end();
