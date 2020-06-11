@@ -34,6 +34,7 @@
     "@hebcal/core": "^1.0.15",
     "@hebcal/icalendar": "^1.0.0",
     "@hebcal/leyning": "^1.0.5",
+    "aws-sdk": "^2.693.0",
     "better-sqlite3": "^7.0.1",
     "dayjs": "^1.8.28",
     "fs-ext": "^2.0.0",
