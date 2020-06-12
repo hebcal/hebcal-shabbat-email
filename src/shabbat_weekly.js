@@ -68,11 +68,13 @@ async function main(sleepMillis) {
   const lockfile = fs.openSync('/tmp/hebcal-shabbat-weekly.lock', 'w');
   await flock(lockfile, 'ex');
 
-  logger.info('Opening ZIP code database...');
-  const zipsDb = new Database('zips.sqlite3', {fileMustExist: true});
+  const zipsFilename = 'zips.sqlite3';
+  logger.info(`Opening ${zipsFilename}...`);
+  const zipsDb = new Database(zipsFilename, {fileMustExist: true});
 
-  logger.info('Opening GeoNames database...');
-  const geonamesDb = new Database('geonames.sqlite3', {fileMustExist: true});
+  const geonamesFilename = 'geonames.sqlite3';
+  logger.info(`Opening ${geonamesFilename}...`);
+  const geonamesDb = new Database(geonamesFilename, {fileMustExist: true});
 
   parseAllConfigs(subs, zipsDb, geonamesDb);
 
@@ -361,17 +363,6 @@ function genSubjectAndBody(events, options, shortLocation) {
   return [subject, body, htmlBody];
 }
 
-/*
-  '8299621': 0, // Shetland Islands, Scotland
-  '8556393': 0, // unknown
-  '6091104': 0, // North York, Ontario
-*/
-const GEONAMES_MAP = {
-  '6693679': 282926, // Modi'in
-  '5927689': 5927690, // Coquitlam, British Columbia
-  '6049430': 6049429, // Langley, British Columbia
-};
-
 /**
  * @param {Map<string,any>} config
  * @param {string[]} addrs
@@ -428,9 +419,6 @@ ${allSql}`;
             logger.warn(`unknown city=${cityName} for to=${email}, id=${cfg.id}`);
             continue;
           }
-        }
-        if (cfg.geonameid && GEONAMES_MAP[cfg.geonameid]) {
-          cfg.geonameid = GEONAMES_MAP[cfg.geonameid];
         }
         subs.set(email, cfg);
       }
