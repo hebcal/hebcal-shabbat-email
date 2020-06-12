@@ -25,6 +25,7 @@ dayjs.extend(isSameOrBefore);
 dayjs.extend(isSameOrAfter);
 
 const logger = pino({
+  level: argv.quiet ? 'warn' : 'info',
   prettyPrint: {translateTime: true, ignore: 'pid,hostname'},
 });
 
@@ -625,6 +626,7 @@ Options:
   --help           Help
   --dryrun         Prints the actions that ${PROG} would take
                      but does not remove anything
+  --quiet          Only emit warnings and errors
   --sleeptime <n>  Sleep <n> milliseconds between email (default 300)
 `;
   console.log(usage);
