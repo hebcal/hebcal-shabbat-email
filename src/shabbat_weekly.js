@@ -451,34 +451,20 @@ function loadSentLog(sentLogFilename) {
   return result;
 }
 
-
 // Zip-Codes.com TimeZone IDs
-//
-// Code  Description
-//  4    Atlantic (GMT -04:00)
-//  5    Eastern (GMT -05:00)
-//  6    Central (GMT -06:00)
-//  7    Mountain (GMT -07:00)
-//  8    Pacific (GMT -08:00)
-//  9    Alaska (GMT -09:00)
-// 10    Hawaii-Aleutian Islands (GMT -10:00)
-// 11    American Samoa (GMT -11:00)
-// 13    Marshall Islands (GMT +12:00)
-// 14    Guam (GMT +10:00)
-// 15    Palau (GMT +9:00)
 const ZIPCODES_TZ_MAP = {
   '0': 'UTC',
-  '4': 'America/Puerto_Rico',
-  '5': 'America/New_York',
-  '6': 'America/Chicago',
-  '7': 'America/Denver',
-  '8': 'America/Los_Angeles',
-  '9': 'America/Anchorage',
-  '10': 'Pacific/Honolulu',
-  '11': 'Pacific/Pago_Pago',
-  '13': 'Pacific/Funafuti',
-  '14': 'Pacific/Guam',
-  '15': 'Pacific/Palau',
+  '4': 'America/Puerto_Rico', // Atlantic (GMT -04:00)
+  '5': 'America/New_York', //    Eastern  (GMT -05:00)
+  '6': 'America/Chicago', //     Central  (GMT -06:00)
+  '7': 'America/Denver', //      Mountain (GMT -07:00)
+  '8': 'America/Los_Angeles', // Pacific  (GMT -08:00)
+  '9': 'America/Anchorage', //   Alaska   (GMT -09:00)
+  '10': 'Pacific/Honolulu', //   Hawaii-Aleutian Islands (GMT -10:00)
+  '11': 'Pacific/Pago_Pago', //  American Samoa (GMT -11:00)
+  '13': 'Pacific/Funafuti', //   Marshall Islands (GMT +12:00)
+  '14': 'Pacific/Guam', //       Guam     (GMT +10:00)
+  '15': 'Pacific/Palau', //      Palau    (GMT +9:00)
 };
 
 /**
