@@ -56,7 +56,7 @@ async function main(sleepMillis) {
   const subs = await loadSubs(config, argv._);
   logger.info(`Loaded ${subs.size} users`);
 
-  const d = formatYYYYMMDD(new Date());
+  const d = dayjs().format('YYYYMMDD');
   const sentLogFilename = `/home/hebcal/local/var/log/shabbat-${d}`;
 
   const alreadySent = loadSentLog(sentLogFilename);
@@ -435,16 +435,6 @@ ${allSql}`;
       return resolve(subs);
     });
   });
-}
-
-/**
- * @param {Date} d
- * @return {string}
- */
-function formatYYYYMMDD(d) {
-  return String(d.getFullYear()).padStart(4, '0') +
-        String(d.getMonth() + 1).padStart(2, '0') +
-        String(d.getDate()).padStart(2, '0');
 }
 
 /**
