@@ -7,7 +7,7 @@ import minimist from 'minimist';
 
 const argv = minimist(process.argv.slice(2));
 const logger = pino({prettyPrint: {translateTime: true, ignore: 'pid,hostname'}});
-const iniPath = argv.ini || '/home/hebcal/local/bin/hebcal-dot-com.ini';
+const iniPath = argv.ini || '/home/hebcal/local/etc/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 
 main();

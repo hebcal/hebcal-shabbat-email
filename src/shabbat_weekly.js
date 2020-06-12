@@ -51,7 +51,7 @@ main(argv.sleeptime)
  * @param {number} sleepMillis time to sleep between messages in milliseconds
  */
 async function main(sleepMillis) {
-  const iniPath = argv.ini || '/home/hebcal/local/bin/hebcal-dot-com.ini';
+  const iniPath = argv.ini || '/home/hebcal/local/etc/hebcal-dot-com.ini';
   logger.info(`Reading ${iniPath}...`);
   const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
   const subs = await loadSubs(config, argv._);
