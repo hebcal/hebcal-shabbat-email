@@ -213,7 +213,7 @@ async function errorMail(emailAddress) {
     from: 'Hebcal <shabbat-owner@hebcal.com>',
     to: emailAddress,
     subject: 'Unable to process your message',
-    text: 'Sorry,\n\We are unable to process the message from <' + emailAddress + '>.\n\n' +
+    text: 'Sorry,\n\nWe are unable to process the message from <' + emailAddress + '>.\n\n' +
     'The email address used to send your message is not subscribed to the Shabbat ' +
     'candle lighting time list.\n\nRegards,\nhebcal.com\n\n',
   };
