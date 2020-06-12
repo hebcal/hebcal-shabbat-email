@@ -54,6 +54,57 @@ write_files:
     permissions: '0644'
     content: |
       ENABLED="true"
+  - path: /etc/cron.d/hebcal
+    permissions: '0644'
+    content: |
+      # Created by Hebcal cloud-config.yaml
+      SHELL=/bin/sh
+      MAILTO="mradwin@hebcal.com"
+      APPDIR=/home/hebcal/hebcal-nodejs/dist
+      # shabbat: regular emails at 8:53am and 2:53pm Eastern on Thursdays
+      53 8,14 * * 4 hebcal cd /home/hebcal/hebcal-nodejs && node $APPDIR/shabbat_weekly.js
+      # shabbat: post to Twitter on Thursday between 1:17-1:37pm Eastern
+      # Sleep a random amount, not greater than 30 minutes
+      17 13 * * 4 hebcal node $APPDIR/post_twitter.js --shabbat --randsleep=1800
+      # post to Twitter Sunday-Friday between 11:03-11:33am Eastern
+      3 11 * * 0-5 hebcal node $APPDIR/post_twitter.js --daily --randsleep=1800
+      # clear bounces at 8:50am Thu and 1:03pm on friday
+      50 8 * * 4 hebcal node $APPDIR/shabbat_deactivate.js -count 2
+      3 13 * * 5 hebcal node $APPDIR/shabbat_deactivate.js -count 2
+      # process Amazon SQS email bounces every 5 minutes
+      */5 * * * * hebcal node $APPDIR/shabbat_bounce_sqs.js
+  - path: /etc/cron.d/hebcal
+    permissions: '0644'
+    content: |
+      smtpd_banner = $myhostname ESMTP $mail_name (Ubuntu)
+      biff = no
+      append_dot_mydomain = no
+      readme_directory = no
+      compatibility_level = 2
+      smtpd_tls_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
+      smtpd_tls_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
+      smtpd_tls_security_level=may
+      smtp_use_tls = yes
+      smtp_tls_security_level = encrypt
+      smtp_tls_note_starttls_offer = yes
+      smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt
+      smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
+      smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated defer_unauth_destination
+      myhostname = localhost
+      alias_maps = hash:/etc/aliases
+      alias_database = hash:/etc/aliases
+      myorigin = /etc/mailname
+      mydestination = 
+      mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+      mailbox_size_limit = 0
+      recipient_delimiter = +
+      inet_interfaces = loopback-only
+      inet_protocols = all
+      relayhost = [email-smtp.us-east-1.amazonaws.com]:25
+      smtp_sasl_auth_enable = yes
+      smtp_sasl_security_options = noanonymous
+      smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+
 
 runcmd:
   - service netfilter-persistent flush
