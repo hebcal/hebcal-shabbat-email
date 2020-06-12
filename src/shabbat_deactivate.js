@@ -1,10 +1,9 @@
 /* eslint-disable require-jsdoc */
 import fs from 'fs';
 import ini from 'ini';
-import util from 'util';
-import mysql from 'mysql';
 import pino from 'pino';
 import minimist from 'minimist';
+import {makeDb} from './makedb';
 
 const PROG = 'shabbat_deactivate.js';
 const COUNT_DEFAULT = 7;
@@ -32,26 +31,6 @@ main(argv.sleeptime)
       process.exit(1);
     });
 
-function makeDb(config) {
-  const connection = mysql.createConnection(config);
-  connection.connect(function(err) {
-    if (err) {
-      logger.fatal(err);
-      throw err;
-    }
-  });
-  const connQuery = util.promisify(connection.query);
-  const connEnd = util.promisify(connection.end);
-  return {
-    query(sql, args) {
-      return connQuery.call(connection, sql, args);
-    },
-    close() {
-      return connEnd.call(connection);
-    },
-  };
-}
-
 async function getLogDir() {
   try {
     const stats = await fstat(logdir);
@@ -64,12 +43,7 @@ async function getLogDir() {
 }
 
 async function main() {
-  const db = makeDb({
-    host: config['hebcal.mysql.host'],
-    user: config['hebcal.mysql.user'],
-    password: config['hebcal.mysql.password'],
-    database: config['hebcal.mysql.dbname'],
-  });
+  const db = makeDb(config);
   await getLogDir();
   const addrs = await getCandidates(db);
   logger.info(`Deactivating ${addrs.length} subscriptions`);

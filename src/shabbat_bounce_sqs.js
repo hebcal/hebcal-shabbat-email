@@ -2,7 +2,7 @@
 import fs from 'fs';
 import ini from 'ini';
 import util from 'util';
-import mysql from 'mysql';
+import {makeDb} from './makedb';
 import pino from 'pino';
 import minimist from 'minimist';
 import nodemailer from 'nodemailer';
@@ -251,24 +251,6 @@ async function unsubscribe(db, destination, emailAddress, emailId, subsLogStream
   return transporter.sendMail(message);
 }
 
-function makeDb(config) {
-  const connection = mysql.createConnection(config);
-  connection.connect(function(err) {
-    if (err) {
-      logger.fatal(err);
-      throw err;
-    }
-  });
-  return {
-    query(sql, args) {
-      return util.promisify(connection.query).call(connection, sql, args);
-    },
-    close() {
-      return util.promisify(connection.end).call(connection);
-    },
-  };
-}
-
 async function getLogDir() {
   try {
     const stats = await fstat(logdir);
@@ -281,12 +263,7 @@ async function getLogDir() {
 }
 
 async function main() {
-  const db = makeDb({
-    host: config['hebcal.mysql.host'],
-    user: config['hebcal.mysql.user'],
-    password: config['hebcal.mysql.password'],
-    database: config['hebcal.mysql.dbname'],
-  });
+  const db = makeDb(config);
   await getLogDir();
   await readUnsubQueue(sqs, db);
   await readBounceQueue(sqs, db);
