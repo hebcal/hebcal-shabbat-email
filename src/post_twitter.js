@@ -10,37 +10,52 @@ const logger = pino({prettyPrint: {translateTime: true, ignore: 'pid,hostname'}}
 const iniPath = argv.ini || '/home/hebcal/local/bin/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 
-if (argv.daily) {
-  const twitterStatus = getDailyStatusText();
-  if (twitterStatus) {
-    logger.info(twitterStatus);
-    logInAndPost(twitterStatus);
-  }
-}
+main();
 
-if (argv.shabbat) {
-  const twitterStatus = getShabbatStatusText();
-  logger.info(twitterStatus);
-  logInAndPost(twitterStatus);
+// eslint-disable-next-line require-jsdoc
+async function main() {
+  if (argv.randsleep) {
+    const seconds = Math.floor(Math.random() * argv.randsleep);
+    logger.info(`Sleeping for ${seconds} seconds before posting`);
+    if (!argv.dryrun) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 1000 * seconds);
+      });
+    }
+  }
+  try {
+    if (argv.daily) {
+      const twitterStatus = getDailyStatusText();
+      if (twitterStatus) {
+        logger.info(twitterStatus);
+        await logInAndPost(twitterStatus);
+      }
+    } else if (argv.shabbat) {
+      const twitterStatus = getShabbatStatusText();
+      logger.info(twitterStatus);
+      await logInAndPost(twitterStatus);
+    }
+  } catch (err) {
+    logger.fatal(err);
+    process.exit(1);
+  }
 }
 
 /**
  * @param {string} twitterStatus
  */
-function logInAndPost(twitterStatus) {
+async function logInAndPost(twitterStatus) {
   const client = new Twitter({
     consumer_key: config['hebcal.twitter.consumer_key'],
     consumer_secret: config['hebcal.twitter.consumer_secret'],
-    access_token_key: config['hebcal.twitter.token'],
-    access_token_secret: config['hebcal.twitter.token_secret'],
+    access_token_key: config['hebcal.twitter.access_token_key'],
+    access_token_secret: config['hebcal.twitter.access_token_secret'],
   });
-  client.post('statuses/update', {status: twitterStatus}, function(error, tweet, response) {
-    if (error) {
-      logger.fatal(error);
-      process.exit(1);
-    }
-    logger.info(tweet); // Tweet body.
-    logger.info(response); // Raw response object.
+  return new Promise((resolve, reject) => {
+    client.post('statuses/update', {status: twitterStatus}, function(error, tweet, response) {
+      if (error) return reject(error);
+      return resolve(tweet);
+    });
   });
 }
 
