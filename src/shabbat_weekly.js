@@ -10,6 +10,7 @@ import {flock} from 'fs-ext';
 import mysql from 'mysql';
 import nodemailer from 'nodemailer';
 import minimist from 'minimist';
+import {dirIfExistsOrCwd} from './makedb';
 const city2geonameid = require('./city2geonameid.json');
 
 const argv = minimist(process.argv.slice(2));
@@ -56,8 +57,8 @@ async function main(sleepMillis) {
   const subs = await loadSubs(config, argv._);
   logger.info(`Loaded ${subs.size} users`);
 
-  const d = dayjs().format('YYYYMMDD');
-  const sentLogFilename = `/home/hebcal/local/var/log/shabbat-${d}`;
+  const logdir = await dirIfExistsOrCwd('/home/hebcal/local/var/log');
+  const sentLogFilename = logdir + '/shabbat-' + dayjs().format('YYYYMMDD');
 
   const alreadySent = loadSentLog(sentLogFilename);
   logger.info(`Skipping ${alreadySent.size} users from previous run`);
@@ -181,8 +182,6 @@ function exitIfYomTov(d) {
   }
 }
 
-const locationCache = new Map();
-
 /**
  * mails the user
  * @param {nodemailer.Mail} transporter
@@ -263,16 +262,19 @@ ${BLANK}
   return message;
 }
 
+let prevCfg;
+let prevSubjAndBody;
+
 /**
  * looks up or generates subject and body
  * @param {any} cfg
  * @return {string[]}
  */
 function getSubjectAndBody(cfg) {
-  const cacheKey = cfg.zip ? `z${cfg.zip}` : `g${cfg.geonameid}`;
-  const cached = locationCache.get(cacheKey);
-  if (cached) {
-    return cached;
+  if (prevCfg && cfg.m == prevCfg.m &&
+    ((cfg.geonameid && cfg.geonameid == prevCfg.geonameid) ||
+    (cfg.zip && cfg.zip == prevCfg.zip))) {
+    return prevSubjAndBody;
   }
   const comma = cfg.cityDescr.indexOf(',');
   const shortLocation = comma == -1 ? cfg.cityDescr : cfg.cityDescr.substring(0, comma);
@@ -290,7 +292,8 @@ function getSubjectAndBody(cfg) {
   };
   const events = hebcal.hebrewCalendar(options);
   const subjAndBody = genSubjectAndBody(events, options, shortLocation);
-  locationCache.set(cacheKey, subjAndBody);
+  prevSubjAndBody = subjAndBody;
+  prevCfg = cfg;
   return subjAndBody;
 }
 
