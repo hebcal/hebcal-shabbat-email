@@ -3,7 +3,7 @@ import fs from 'fs';
 import ini from 'ini';
 import pino from 'pino';
 import minimist from 'minimist';
-import {makeDb} from './makedb';
+import {makeDb, dirIfExistsOrCwd} from './makedb';
 
 const PROG = 'shabbat_deactivate.js';
 const COUNT_DEFAULT = 7;
@@ -20,7 +20,7 @@ argv.count = argv.count || COUNT_DEFAULT;
 const logger = pino({prettyPrint: {translateTime: true, ignore: 'pid,hostname'}});
 const iniPath = argv.ini || '/home/hebcal/local/bin/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
-let logdir = '/home/hebcal/local/var/log';
+let logdir;
 
 main(argv.sleeptime)
     .then(() => {
@@ -31,20 +31,9 @@ main(argv.sleeptime)
       process.exit(1);
     });
 
-async function getLogDir() {
-  try {
-    const stats = await fstat(logdir);
-    if (!stats || !stats.isDirectory()) {
-      logdir = '.';
-    }
-  } catch (err) {
-    logdir = '.';
-  }
-}
-
 async function main() {
   const db = makeDb(config);
-  await getLogDir();
+  logdir = await dirIfExistsOrCwd('/home/hebcal/local/var/log');
   const addrs = await getCandidates(db);
   logger.info(`Deactivating ${addrs.length} subscriptions`);
   if (!argv.dryrun && addrs.length) {

@@ -1,17 +1,18 @@
 import util from 'util';
 import mysql from 'mysql';
+import fs from 'fs';
 
 /**
  * Wraps a MySQL connection in promises
- * @param {Object} config
+ * @param {Object} iniConfig
  * @return {Object}
  */
-export function makeDb(config) {
+export function makeDb(iniConfig) {
   const connection = mysql.createConnection({
-    host: config['hebcal.mysql.host'],
-    user: config['hebcal.mysql.user'],
-    password: config['hebcal.mysql.password'],
-    database: config['hebcal.mysql.dbname'],
+    host: iniConfig['hebcal.mysql.host'],
+    user: iniConfig['hebcal.mysql.user'],
+    password: iniConfig['hebcal.mysql.password'],
+    database: iniConfig['hebcal.mysql.dbname'],
   });
   connection.connect(function(err) {
     if (err) {
@@ -28,4 +29,24 @@ export function makeDb(config) {
       return connEnd.call(connection);
     },
   };
+}
+
+/**
+ * Returns directory name if it exists, else '.' for current working directory
+ * @async
+ * @param {string} dir
+ * @return {string}
+ */
+export async function dirIfExistsOrCwd(dir) {
+  return new Promise((resolve, reject) => {
+    fs.stat(dir, function(err, stats) {
+      if (err) {
+        return resolve('.');
+      }
+      if (!stats || !stats.isDirectory()) {
+        return resolve('.');
+      }
+      return resolve(dir);
+    });
+  });
 }

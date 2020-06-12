@@ -2,7 +2,7 @@
 import fs from 'fs';
 import ini from 'ini';
 import util from 'util';
-import {makeDb} from './makedb';
+import {makeDb, dirIfExistsOrCwd} from './makedb';
 import pino from 'pino';
 import minimist from 'minimist';
 import nodemailer from 'nodemailer';
@@ -14,8 +14,7 @@ const logger = pino({prettyPrint: {translateTime: true, ignore: 'pid,hostname'}}
 const iniPath = argv.ini || '/home/hebcal/local/bin/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 
-const fstat = util.promisify(fs.stat);
-let logdir = '/home/hebcal/local/var/log';
+let logdir;
 
 AWS.config.update({region: 'us-east-1'});
 const sqs = new AWS.SQS({
@@ -251,20 +250,9 @@ async function unsubscribe(db, destination, emailAddress, emailId, subsLogStream
   return transporter.sendMail(message);
 }
 
-async function getLogDir() {
-  try {
-    const stats = await fstat(logdir);
-    if (!stats || !stats.isDirectory()) {
-      logdir = '.';
-    }
-  } catch (err) {
-    logdir = '.';
-  }
-}
-
 async function main() {
   const db = makeDb(config);
-  await getLogDir();
+  logdir = await dirIfExistsOrCwd('/home/hebcal/local/var/log');
   await readUnsubQueue(sqs, db);
   await readBounceQueue(sqs, db);
   return db.close();
