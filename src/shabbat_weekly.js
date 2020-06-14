@@ -1,7 +1,5 @@
 import Database from 'better-sqlite3';
 import dayjs from 'dayjs';
-import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
-import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import fs from 'fs';
 import ini from 'ini';
 import {flags, HDate, Event, holidays, hebcal, Location} from '@hebcal/core';
@@ -21,9 +19,6 @@ if (argv.help || argv.h) {
 // allow sleeptime=0 for no sleep
 argv.sleeptime = typeof argv.sleeptime == 'undefined' ? 300 : +argv.sleeptime;
 
-dayjs.extend(isSameOrBefore);
-dayjs.extend(isSameOrAfter);
-
 const logger = pino({
   level: argv.quiet ? 'warn' : 'info',
   prettyPrint: {translateTime: true, ignore: 'pid,hostname'},
@@ -31,14 +26,15 @@ const logger = pino({
 
 logger.info('hello world');
 
-const TODAY = new Date();
+const TODAY0 = dayjs(argv.date); // undefined => new Date()
+const TODAY = TODAY0.toDate();
 exitIfYomTov(TODAY);
-const [midnight, endOfWeek] = getStartAndEndMillis(TODAY);
+const [midnight, endOfWeek] = getStartAndEnd(TODAY);
 
 const UTM_PARAM = 'utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=shabbat-' +
   dayjs(TODAY).format('YYYY-MM-DD');
 
-main(argv.sleeptime)
+main()
     .then(() => {
       logger.info('Success!');
     })
@@ -49,9 +45,8 @@ main(argv.sleeptime)
 
 /**
  * Main event loop
- * @param {number} sleepMillis time to sleep between messages in milliseconds
  */
-async function main(sleepMillis) {
+async function main() {
   const iniPath = argv.ini || '/home/hebcal/local/etc/hebcal-dot-com.ini';
   logger.info(`Reading ${iniPath}...`);
   const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
@@ -59,7 +54,7 @@ async function main(sleepMillis) {
   logger.info(`Loaded ${subs.size} users`);
 
   const logdir = await dirIfExistsOrCwd('/home/hebcal/local/var/log');
-  const sentLogFilename = logdir + '/shabbat-' + dayjs().format('YYYYMMDD');
+  const sentLogFilename = logdir + '/shabbat-' + TODAY0.format('YYYYMMDD');
 
   const alreadySent = loadSentLog(sentLogFilename);
   logger.info(`Skipping ${alreadySent.size} users from previous run`);
@@ -122,8 +117,8 @@ async function main(sleepMillis) {
     if (!argv.dryrun) {
       writeLogLine(logStream, cfg, info);
     }
-    if (sleepMillis && i != count - 1) {
-      msleep(sleepMillis);
+    if (argv.sleeptime && i != count - 1) {
+      msleep(argv.sleeptime);
     }
     i++;
   }
@@ -151,7 +146,7 @@ function writeLogLine(logStream, cfg, info) {
  * @param {Date} now
  * @return {dayjs.Dayjs[]}
  */
-function getStartAndEndMillis(now) {
+function getStartAndEnd(now) {
   const midnight = dayjs(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
   const dow = midnight.day();
   const saturday = midnight.add(6 - dow, 'day');
@@ -173,15 +168,12 @@ function msleep(n) {
  * @param {Date} d
  */
 function exitIfYomTov(d) {
-  const today = holidays.getHolidaysOnDate(new HDate(d));
-  if (today) {
-    for (const ev of today) {
-      if (ev.getFlags() & flags.CHAG) {
-        const desc = ev.getDesc();
-        logger.info(`Today is ${desc}; exiting due to holiday...`);
-        process.exit(0);
-      }
-    }
+  const todayEvents = holidays.getHolidaysOnDate(new HDate(d)) || [];
+  const chag = todayEvents.find((ev) => ev.getFlags() & flags.CHAG);
+  if (chag) {
+    const desc = ev.getDesc();
+    logger.info(`Today is ${desc}; exiting due to holiday...`);
+    process.exit(0);
   }
 }
 
@@ -195,9 +187,6 @@ function mailUser(transporter, cfg) {
   const message = getMessage(cfg);
   if (argv.dryrun) {
     return undefined;
-  }
-  if (cfg.cc == 'RU') {
-    logger.info(message);
   }
   return transporter.sendMail(message);
 }
@@ -284,9 +273,8 @@ function getSubjectAndBody(cfg) {
   const location = new Location(cfg.latitude, cfg.longitude, cfg.il, cfg.tzid,
       cfg.cityName, cfg.cc, cfg.zip || cfg.geonameid);
   const options = {
-    year: TODAY.getFullYear(),
-    isHebrewYear: false,
-    numYears: TODAY.getMonth() == 11 ? 2 : 1,
+    start: midnight.toDate(),
+    end: endOfWeek.toDate(),
     location: location,
     candlelighting: true,
     havdalahMins: cfg.m,
@@ -309,15 +297,6 @@ const BLANK = '<div>&nbsp;</div>';
  * @return {string[]}
  */
 function genSubjectAndBody(events, options, shortLocation) {
-  events = events.filter((e) => {
-    const dt = dayjs(e.getDate().greg());
-    if (dt.isSameOrAfter(midnight) && dt.isSameOrBefore(endOfWeek)) {
-      e.getAttrs().dt = dt;
-      return true;
-    } else {
-      return false;
-    }
-  });
   let body = '';
   let htmlBody = '';
   let firstCandles;
@@ -325,7 +304,7 @@ function genSubjectAndBody(events, options, shortLocation) {
   const holidaySeen = {};
   for (const ev of events) {
     const desc = ev.getDesc();
-    const dt = ev.getAttrs().dt;
+    const dt = dayjs(ev.getDate().greg());
     const mask = ev.getFlags();
     const attrs = ev.getAttrs();
     const strtime = dt.format('dddd, MMMM DD');
