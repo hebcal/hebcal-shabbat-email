@@ -20,30 +20,36 @@ main();
 
 // eslint-disable-next-line require-jsdoc
 async function main() {
-  if (argv.randsleep) {
-    const seconds = Math.floor(Math.random() * argv.randsleep);
-    logger.info(`Sleeping for ${seconds} seconds before posting`);
-    if (!argv.dryrun) {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 1000 * seconds);
-      });
-    }
-  }
   try {
     if (argv.daily) {
       const twitterStatus = getDailyStatusText();
       if (twitterStatus) {
         logger.info(twitterStatus);
+        await randSleep();
         await logInAndPost(twitterStatus);
       }
     } else if (argv.shabbat) {
       const twitterStatus = getShabbatStatusText();
       logger.info(twitterStatus);
+      await randSleep();
       await logInAndPost(twitterStatus);
     }
   } catch (err) {
     logger.fatal(err);
     process.exit(1);
+  }
+}
+
+/** n/a */
+async function randSleep() {
+  if (argv.randsleep && !argv.dryrun) {
+    const seconds = Math.floor(Math.random() * argv.randsleep);
+    return new Promise((resolve) => {
+      logger.info(`Sleeping for ${seconds} seconds before posting`);
+      setTimeout(resolve, 1000 * seconds);
+    });
+  } else {
+    return Promise.resolve(true);
   }
 }
 
