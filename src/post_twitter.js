@@ -5,7 +5,10 @@ import {Sedra, HDate, common, holidays, flags, hebcal, Event} from '@hebcal/core
 import pino from 'pino';
 import minimist from 'minimist';
 
-const argv = minimist(process.argv.slice(2));
+const argv = minimist(process.argv.slice(2), {
+  boolean: ['dryrun', 'quiet', 'daily', 'shabbat'],
+  alias: {n: 'dryrun', q: 'quiet'},
+});
 const logger = pino({
   level: argv.quiet ? 'warn' : 'info',
   prettyPrint: {translateTime: true, ignore: 'pid,hostname'},

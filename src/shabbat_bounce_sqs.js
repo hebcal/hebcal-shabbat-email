@@ -7,7 +7,10 @@ import minimist from 'minimist';
 import nodemailer from 'nodemailer';
 import AWS from 'aws-sdk';
 
-const argv = minimist(process.argv.slice(2));
+const argv = minimist(process.argv.slice(2), {
+  boolean: ['quiet'],
+  alias: {q: 'quiet'},
+});
 
 const logger = pino({
   level: argv.quiet ? 'warn' : 'info',

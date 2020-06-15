@@ -69,8 +69,8 @@ write_files:
       # post to Twitter Sunday-Friday between 11:03-11:33am Eastern
       3 11 * * 0-5 hebcal node $APPDIR/post_twitter.js --daily --randsleep=1800
       # clear bounces at 8:50am Thu and 1:03pm on friday
-      50 8 * * 4 hebcal node $APPDIR/shabbat_deactivate.js --count 2
-      3 13 * * 5 hebcal node $APPDIR/shabbat_deactivate.js --count 2
+      50 8 * * 4 hebcal node $APPDIR/shabbat_deactivate.js --count 3
+      3 13 * * 5 hebcal node $APPDIR/shabbat_deactivate.js --count 3
       # process Amazon SQS email bounces every 5 minutes
       */5 * * * * hebcal node $APPDIR/shabbat_bounce_sqs.js --quiet
   - path: /etc/cron.d/hebcal

@@ -11,8 +11,11 @@ import minimist from 'minimist';
 import {dirIfExistsOrCwd} from './makedb';
 const city2geonameid = require('./city2geonameid.json');
 
-const argv = minimist(process.argv.slice(2));
-if (argv.help || argv.h) {
+const argv = minimist(process.argv.slice(2), {
+  boolean: ['dryrun', 'quiet', 'help'],
+  alias: {h: 'help', n: 'dryrun', q: 'quiet'},
+});
+if (argv.help) {
   usage();
   process.exit(1);
 }
