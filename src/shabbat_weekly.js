@@ -305,9 +305,11 @@ function genSubjectAndBody(events, options, shortLocation) {
   let firstCandles;
   let sedra;
   const holidaySeen = {};
+  let roshChodeshSeen = false;
   for (const ev of events) {
     const desc = ev.render();
-    const dt = dayjs(ev.getDate().greg());
+    const hd = ev.getDate();
+    const dt = dayjs(hd.greg());
     const mask = ev.getFlags();
     const attrs = ev.getAttrs();
     const strtime = dt.format('dddd, MMMM DD');
@@ -326,17 +328,25 @@ function genSubjectAndBody(events, options, shortLocation) {
       body += `  ${url}\n`;
       htmlBody += `<div>This week's Torah portion is <a href="${url}?${UTM_PARAM}">${desc}</a>.</div>\n${BLANK}`;
     } else {
+      let occursOn = strtime;
       const dow = dt.day();
       if (dow == 6 && !sedra && (mask & flags.CHAG || attrs.cholHaMoedDay)) {
         sedra = hebcal.getHolidayBasename(desc);
+      } else if (mask & flags.ROSH_CHODESH) {
+        if (roshChodeshSeen) {
+          continue;
+        } else if (hd.getDate() == 30) {
+          occursOn += ' and ' + dt.add(1, 'day').format('dddd, MMMM DD');
+          roshChodeshSeen = true;
+        }
       }
-      body += `${desc} occurs on ${strtime}\n`;
+      body += `${desc} occurs on ${occursOn}\n`;
       const url = hebcal.getEventUrl(ev);
       if (url && !holidaySeen[url]) {
         body += `  ${url}\n`;
         holidaySeen[url] = true;
       }
-      htmlBody += `<div><a href="${url}?${UTM_PARAM}">${desc}</a> occurs on ${strtime}.</div>\n${BLANK}`;
+      htmlBody += `<div><a href="${url}?${UTM_PARAM}">${desc}</a> occurs on ${occursOn}.</div>\n${BLANK}`;
     }
   }
   let subject = '[shabbat]';
