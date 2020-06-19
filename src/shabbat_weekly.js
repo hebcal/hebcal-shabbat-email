@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import dayjs from 'dayjs';
 import fs from 'fs';
 import ini from 'ini';
-import {flags, HDate, Event, holidays, hebcal, Location} from '@hebcal/core';
+import {flags, HDate, Event, holidays, hebcal, Location, common} from '@hebcal/core';
 import pino from 'pino';
 import {flock} from 'fs-ext';
 import mysql from 'mysql';
@@ -27,8 +27,6 @@ const logger = pino({
   prettyPrint: {translateTime: true, ignore: 'pid,hostname'},
 });
 
-logger.info('hello world');
-
 const TODAY0 = dayjs(argv.date); // undefined => new Date()
 const TODAY = TODAY0.toDate();
 exitIfYomTov(TODAY);
@@ -36,6 +34,8 @@ const [midnight, endOfWeek] = getStartAndEnd(TODAY);
 
 const UTM_PARAM = 'utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=shabbat-' +
   dayjs(TODAY).format('YYYY-MM-DD');
+const months = common.months;
+const FORMAT_DOW_MONTH_DAY = 'dddd, MMMM D';
 
 main()
     .then(() => {
@@ -174,7 +174,7 @@ function exitIfYomTov(d) {
   const todayEvents = holidays.getHolidaysOnDate(new HDate(d)) || [];
   const chag = todayEvents.find((ev) => ev.getFlags() & flags.CHAG);
   if (chag) {
-    const desc = ev.getDesc();
+    const desc = chag.getDesc();
     logger.info(`Today is ${desc}; exiting due to holiday...`);
     process.exit(0);
   }
@@ -200,7 +200,7 @@ function mailUser(transporter, cfg) {
  * @return {any}
  */
 function getMessage(cfg) {
-  const [subj, body0, htmlBody0] = getSubjectAndBody(cfg);
+  const [subj, body0, htmlBody0, specialNote] = getSubjectAndBody(cfg);
 
   const encoded = encodeURIComponent(Buffer.from(cfg.email).toString('base64'));
   const unsubUrl = `https://www.hebcal.com/email/?e=${encoded}`;
@@ -216,7 +216,7 @@ ${unsubUrl}
 `;
 
   const htmlBody = `<!DOCTYPE html><html><head><title>Hebcal Shabbat Times</title></head>
-<body>
+<body>${specialNote}
 <div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
 ${htmlBody0}
 <div style="font-size:16px">
@@ -271,8 +271,6 @@ function getSubjectAndBody(cfg) {
     (cfg.zip && cfg.zip == prevCfg.zip))) {
     return prevSubjAndBody;
   }
-  const comma = cfg.cityDescr.indexOf(',');
-  const shortLocation = comma == -1 ? cfg.cityDescr : cfg.cityDescr.substring(0, comma);
   const location = new Location(cfg.latitude, cfg.longitude, cfg.il, cfg.tzid,
       cfg.cityName, cfg.cc, cfg.zip || cfg.geonameid);
   const options = {
@@ -285,7 +283,7 @@ function getSubjectAndBody(cfg) {
     sedrot: true,
   };
   const events = hebcal.hebrewCalendar(options);
-  const subjAndBody = genSubjectAndBody(events, options, shortLocation);
+  const subjAndBody = genSubjectAndBody(events, options, cfg);
   prevSubjAndBody = subjAndBody;
   prevCfg = cfg;
   return subjAndBody;
@@ -296,10 +294,10 @@ const BLANK = '<div>&nbsp;</div>';
 /**
  * @param {Event[]} events
  * @param {hebcal.HebcalOptions} options
- * @param {string} shortLocation
+ * @param {any} cfg
  * @return {string[]}
  */
-function genSubjectAndBody(events, options, shortLocation) {
+function genSubjectAndBody(events, options, cfg) {
   let body = '';
   let htmlBody = '';
   let firstCandles;
@@ -312,7 +310,7 @@ function genSubjectAndBody(events, options, shortLocation) {
     const dt = dayjs(hd.greg());
     const mask = ev.getFlags();
     const attrs = ev.getAttrs();
-    const strtime = dt.format('dddd, MMMM DD');
+    const strtime = dt.format(FORMAT_DOW_MONTH_DAY);
     if (desc.startsWith('Candle lighting') || desc.startsWith('Havdalah')) {
       const hourMin = hebcal.reformatTimeStr(attrs.eventTimeStr, 'pm', options);
       const shortDesc = desc.substring(0, desc.indexOf(':'));
@@ -320,13 +318,13 @@ function genSubjectAndBody(events, options, shortLocation) {
         firstCandles = hourMin;
       }
       body += `${shortDesc} is at ${hourMin} on ${strtime}\n`;
-      htmlBody += `<div>${shortDesc} is at <strong>${hourMin}</strong> on ${strtime}.</div>\n${BLANK}`;
+      htmlBody += `<div>${shortDesc} is at <strong>${hourMin}</strong> on ${strtime}.</div>\n${BLANK}\n`;
     } else if (mask == flags.PARSHA_HASHAVUA) {
       sedra = desc.substring(desc.indexOf(' ') + 1);
       body += `This week's Torah portion is ${desc}\n`;
       const url = hebcal.getEventUrl(ev);
       body += `  ${url}\n`;
-      htmlBody += `<div>This week's Torah portion is <a href="${url}?${UTM_PARAM}">${desc}</a>.</div>\n${BLANK}`;
+      htmlBody += `<div>This week's Torah portion is <a href="${url}?${UTM_PARAM}">${desc}</a>.</div>\n${BLANK}\n`;
     } else {
       let occursOn = strtime;
       const dow = dt.day();
@@ -336,7 +334,7 @@ function genSubjectAndBody(events, options, shortLocation) {
         if (roshChodeshSeen) {
           continue;
         } else if (hd.getDate() == 30) {
-          occursOn += ' and ' + dt.add(1, 'day').format('dddd, MMMM DD');
+          occursOn += ' and ' + dt.add(1, 'day').format(FORMAT_DOW_MONTH_DAY);
           roshChodeshSeen = true;
         }
       }
@@ -346,15 +344,87 @@ function genSubjectAndBody(events, options, shortLocation) {
         body += `  ${url}\n`;
         holidaySeen[url] = true;
       }
-      htmlBody += `<div><a href="${url}?${UTM_PARAM}">${desc}</a> occurs on ${occursOn}.</div>\n${BLANK}`;
+      htmlBody += `<div><a href="${url}?${UTM_PARAM}">${desc}</a> occurs on ${occursOn}.</div>\n${BLANK}\n`;
     }
   }
+  const comma = cfg.cityDescr.indexOf(',');
+  const shortLocation = comma == -1 ? cfg.cityDescr : cfg.cityDescr.substring(0, comma);
   let subject = '[shabbat]';
   if (sedra) subject += ` ${sedra} -`;
   subject += ' ' + shortLocation;
   if (firstCandles) subject += ` candles ${firstCandles}`;
 
-  return [subject, body, htmlBody];
+  const specialNote = getSpecialNote(cfg, shortLocation);
+  return [subject, body, htmlBody, specialNote];
+}
+
+/**
+ * @param {any} cfg
+ * @param {string} shortLocation
+ * @return {string}
+ */
+function getSpecialNote(cfg, shortLocation) {
+  const hd = new HDate(TODAY);
+  const mm = hd.getMonth();
+  const dd = hd.getDate();
+  const yy = hd.getFullYear();
+  const purimMonth = common.hebLeapYear(yy) ? months.ADAR_II : months.ADAR_I;
+
+  let note;
+  if ((mm == months.AV && dd >= 15) || (mm == months.ELUL && dd >= 16)) {
+    // for the last two weeks of Av and the last week or two of Elul
+    const nextYear = yy + 1;
+    const fridgeLoc = cfg.zip ? `zip=${cfg.zip}` : `geonameid=${cfg.geonameid}`;
+    const erevRH = dayjs(new HDate(1, months.TISHREI, nextYear).prev().greg());
+    const strtime = erevRH.format(FORMAT_DOW_MONTH_DAY);
+    let url = `https://www.hebcal.com/shabbat/fridge.cgi?${fridgeLoc}&amp;year=${nextYear}`;
+    if (cfg.m) url += `&amp;m=${cfg.m}`;
+    url += `&amp;${UTM_PARAM}`;
+    note = `Shana Tova! We wish you a happy and healthy New Year.
+Rosh Hashana ${nextYear} begins at sundown on ${strtime}. Print your <a
+style="color:#356635" href="${url}">${shortLocation} virtual refrigerator magnet</a>
+for candle candle lighting times and Parashat haShavuah on a compact 5x7 page.`;
+  } else if (mm == months.TISHREI && dd <= 9) {
+    // between RH & YK
+    const erevYK = dayjs(new HDate(9, months.TISHREI, yy).greg());
+    const strtime = erevYK.format(FORMAT_DOW_MONTH_DAY);
+    note = `G'mar Chatima Tova! We wish you a good inscription in the Book of Life.
+<a style="color:#356635" href="https://www.hebcal.com/holidays/yom-kippur?${UTM_PARAM}">Yom Kippur</a>
+begins at sundown on ${strtime}.`;
+  } else if ((mm == months.TISHREI && dd >= 17 && dd <= 21) || (mm == months.NISAN && dd >= 17 && dd <= 20)) {
+    const holiday = mm == months.TISHREI ? 'Sukkot' : 'Pesach';
+    note = `Moadim L'Simcha! We wish you a very happy ${holiday}.`;
+  } else if (mm == purimMonth && dd >= 2 && dd <= 10) {
+    // show Purim greeting 1.5 weeks before
+    const erevPurim = dayjs(new HDate(13, purimMonth, yy).greg());
+    const strtime = erevPurim.format(FORMAT_DOW_MONTH_DAY);
+    note = `Chag Purim Sameach!
+<a style="color:#356635" href="https://www.hebcal.com/holidays/purim?${UTM_PARAM}">Purim</a>
+begins at sundown on ${strtime}.`;
+  } else if ((mm == purimMonth && dd >= 17 && dd <= 25) || (mm == months.NISAN && dd >= 2 && dd <= 9)) {
+    // show Pesach greeting shortly after Purim and ~2 weeks before
+    const erevPesach = dayjs(new HDate(14, months.NISAN, yy).greg());
+    const strtime = erevPesach.format(FORMAT_DOW_MONTH_DAY);
+    note = `Chag Kasher v'Sameach! We wish you a happy
+<a style="color:#356635" href="https://www.hebcal.com/holidays/pesach?${UTM_PARAM}">Passover</a>.
+Pesach begins at sundown on ${strtime}.`;
+  } else if (mm == months.KISLEV && dd >= 1 && dd <= 13) {
+    // for the first 2 weeks of Kislev, show Chanukah greeting
+    const erevChanukah = dayjs(new HDate(24, months.KISLEV, yy).greg());
+    const dow = erevChanukah.day();
+    const strtime = erevChanukah.format(FORMAT_DOW_MONTH_DAY);
+    const when = dow == 5 ? 'before sundown' : dow == 6 ? 'at nightfall' : 'at sundown';
+    note = `Chag Urim Sameach! Light the first
+<a style="color:#356635" href="https://www.hebcal.com/holidays/chanukah?${UTM_PARAM}">Chanukah candle</a>
+${when} on ${strtime}.`;
+  }
+
+  if (!note) {
+    return '';
+  }
+
+  return '<div style="font-size:14px;font-family:arial,helvetica,sans-serif;padding:8px;color:#468847;background-color:#dff0d8;border-color:#d6e9c6;border-radius:4px">\n' +
+    note + `\n</div>\n${BLANK}\n`;
 }
 
 /**
