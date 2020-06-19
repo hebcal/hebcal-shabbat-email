@@ -306,18 +306,19 @@ function genSubjectAndBody(events, options, shortLocation) {
   let sedra;
   const holidaySeen = {};
   for (const ev of events) {
-    const desc = ev.getDesc();
+    const desc = ev.render();
     const dt = dayjs(ev.getDate().greg());
     const mask = ev.getFlags();
     const attrs = ev.getAttrs();
     const strtime = dt.format('dddd, MMMM DD');
-    if (desc == 'Candle lighting' || desc == 'Havdalah') {
+    if (desc.startsWith('Candle lighting') || desc.startsWith('Havdalah')) {
       const hourMin = hebcal.reformatTimeStr(attrs.eventTimeStr, 'pm', options);
-      if (!firstCandles && desc == 'Candle lighting') {
+      const shortDesc = desc.substring(0, desc.indexOf(':'));
+      if (!firstCandles && shortDesc == 'Candle lighting') {
         firstCandles = hourMin;
       }
-      body += `${desc} is at ${hourMin} on ${strtime}\n`;
-      htmlBody += `<div>${desc} is at <strong>${hourMin}</strong> on ${strtime}.</div>\n${BLANK}`;
+      body += `${shortDesc} is at ${hourMin} on ${strtime}\n`;
+      htmlBody += `<div>${shortDesc} is at <strong>${hourMin}</strong> on ${strtime}.</div>\n${BLANK}`;
     } else if (mask == flags.PARSHA_HASHAVUA) {
       sedra = desc.substring(desc.indexOf(' ') + 1);
       body += `This week's Torah portion is ${desc}\n`;
