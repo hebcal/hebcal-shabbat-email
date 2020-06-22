@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mjradwin/hebcal-nodejs.git"
+    "url": "git+https://github.com/mjradwin/hebcal-shabbat-email.git"
   },
   "keywords": [
     "hebcal"
@@ -19,9 +19,9 @@
   "author": "Michael J. Radwin (https://github.com/mjradwin)",
   "license": "BSD-2-Clause",
   "bugs": {
-    "url": "https://github.com/mjradwin/hebcal-nodejs/issues"
+    "url": "https://github.com/mjradwin/hebcal-shabbat-email/issues"
   },
-  "homepage": "https://github.com/mjradwin/hebcal-nodejs#readme",
+  "homepage": "https://github.com/mjradwin/hebcal-shabbat-email#readme",
   "devDependencies": {
     "@babel/cli": "^7.10.1",
     "@babel/core": "^7.9.6",
