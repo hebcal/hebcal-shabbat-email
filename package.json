@@ -1,7 +1,7 @@
 {
-  "name": "hebcal-nodejs",
+  "name": "hebcal-shabbat-email",
   "version": "1.0.0",
-  "description": "Jewish Calendar server-side Node.js for www.hebcal.com",
+  "description": "Weekly shabbat times email subscription management for hebcal.com",
   "main": "index.js",
   "scripts": {
     "build": "npm run build:cp-json && npm run build:babel",
