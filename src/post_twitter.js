@@ -1,7 +1,7 @@
 import fs from 'fs';
 import Twitter from 'twitter';
 import ini from 'ini';
-import {Sedra, HDate, common, holidays, flags, hebcal, Event} from '@hebcal/core';
+import {Sedra, HDate, common, holidays, flags, ParshaEvent} from '@hebcal/core';
 import pino from 'pino';
 import minimist from 'minimist';
 
@@ -104,6 +104,16 @@ function getEventStatusText(ev) {
   return undefined;
 }
 
+/**
+ * @param {Event} ev
+ * @return {string}
+ */
+function getShortUrl(ev) {
+  const url = ev.url();
+  return url.replace('https://www.hebcal.com', 'https://hebcal.com')
+      .replace('/holidays/', '/h/').replace('/sedrot/', '/s/');
+}
+
 /** @return {string} */
 function getDailyStatusText() {
   const hd = new HDate();
@@ -113,7 +123,7 @@ function getDailyStatusText() {
       logger.info(`Today is ${ev.getDesc()}`);
       const statusText = getEventStatusText(ev);
       if (statusText) {
-        return statusText + ' ' + hebcal.getShortUrl(ev);
+        return statusText + ' ' + getShortUrl(ev);
       }
     }
   }
@@ -131,7 +141,7 @@ function getDailyStatusText() {
         statusText = `${subj} begins tomorrow at dawn. Tzom Kal. We wish you an easy fast.`;
       }
       if (statusText) {
-        return statusText + ' ' + hebcal.getShortUrl(ev);
+        return statusText + ' ' + getShortUrl(ev);
       }
     }
   }
@@ -143,18 +153,19 @@ function getShabbatStatusText() {
   const hd = new HDate().onOrAfter(common.days.SAT);
   const sedra = new Sedra(hd.getFullYear(), false);
   const parsha = sedra.getString(hd);
-  let parshaEvent = new Event(hd, parsha, flags.PARSHA_HASHAVUA);
   let twitterStatus = `This week\'s #Torah portion is ${parsha}`;
 
   const events = holidays.getHolidaysOnDate(hd);
   if (events) {
-    if (!sedra.isParsha(hd)) {
-      parshaEvent = events.find((e) => e.getFlags() & flags.SPECIAL_SHABBAT);
-    }
     const specialShabbat = events.find((e) => e.getFlags() & flags.SPECIAL_SHABBAT);
     if (specialShabbat) {
       twitterStatus += ` (${specialShabbat.render()})`;
     }
   }
-  return twitterStatus + '. Shabbat Shalom! ' + hebcal.getShortUrl(parshaEvent);
+  let url = '';
+  if (sedra.isParsha(hd)) {
+    const ev = new ParshaEvent(hd, sedra.get(hd));
+    url = ' ' + getShortUrl(ev);
+  }
+  return twitterStatus + '. Shabbat Shalom!' + url;
 }

@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import dayjs from 'dayjs';
 import fs from 'fs';
 import ini from 'ini';
-import {flags, HDate, Event, holidays, hebcal, Location, common} from '@hebcal/core';
+import {flags, HDate, holidays, hebcal, Location, common} from '@hebcal/core';
 import pino from 'pino';
 import {flock} from 'fs-ext';
 import mysql from 'mysql';
@@ -322,7 +322,7 @@ function genSubjectAndBody(events, options, cfg) {
     } else if (mask == flags.PARSHA_HASHAVUA) {
       sedra = desc.substring(desc.indexOf(' ') + 1);
       body += `This week's Torah portion is ${desc}\n`;
-      const url = hebcal.getEventUrl(ev);
+      const url = ev.url();
       body += `  ${url}\n`;
       htmlBody += `<div>This week's Torah portion is <a href="${url}?${UTM_PARAM}">${desc}</a>.</div>\n${BLANK}\n`;
     } else {
@@ -339,7 +339,7 @@ function genSubjectAndBody(events, options, cfg) {
         }
       }
       body += `${desc} occurs on ${occursOn}\n`;
-      const url = hebcal.getEventUrl(ev);
+      const url = ev.url();
       if (url && !holidaySeen[url]) {
         body += `  ${url}\n`;
         holidaySeen[url] = true;
@@ -423,6 +423,7 @@ ${when} on ${strtime}.`;
     return '';
   }
 
+  // eslint-disable-next-line max-len
   return '<div style="font-size:14px;font-family:arial,helvetica,sans-serif;padding:8px;color:#468847;background-color:#dff0d8;border-color:#d6e9c6;border-radius:4px">\n' +
     note + `\n</div>\n${BLANK}\n`;
 }

@@ -60,14 +60,14 @@ write_files:
       # Created by Hebcal cloud-config.yaml
       SHELL=/bin/sh
       MAILTO="mradwin@hebcal.com"
-      APPDIR=/home/hebcal/hebcal-nodejs/dist
+      APPDIR=/home/hebcal/hebcal-shabbat-email/dist
       # shabbat: regular emails at 8:53am and 2:53pm Eastern on Thursdays
-      53 8,14 * * 4 hebcal cd /home/hebcal/hebcal-nodejs && node $APPDIR/shabbat_weekly.js
+      53 8,14 * * 4 hebcal cd /home/hebcal/hebcal-shabbat-email && node $APPDIR/shabbat_weekly.js
       # shabbat: post to Twitter on Thursday between 1:17-1:37pm Eastern
       # Sleep a random amount, not greater than 30 minutes
-      17 13 * * 4 hebcal node $APPDIR/post_twitter.js --shabbat --randsleep=1800
+      17 13 * * 4 hebcal node $APPDIR/post_twitter.js --shabbat --randsleep=600 --quiet
       # post to Twitter Sunday-Friday between 11:03-11:33am Eastern
-      3 11 * * 0-5 hebcal node $APPDIR/post_twitter.js --daily --randsleep=1800
+      3 11 * * 0-5 hebcal node $APPDIR/post_twitter.js --daily --randsleep=300 --quiet
       # clear bounces at 8:50am Thu and 1:03pm on friday
       50 8 * * 4 hebcal node $APPDIR/shabbat_deactivate.js --count 3
       3 13 * * 5 hebcal node $APPDIR/shabbat_deactivate.js --count 3
@@ -134,9 +134,9 @@ runcmd:
   - systemctl reload ssh.service
   - curl -sL https://deb.nodesource.com/setup_12.x | bash -
   - apt-get install -y nodejs
-  - git clone https://github.com/mjradwin/hebcal-nodejs.git /home/hebcal/hebcal-nodejs
-  - cd /home/hebcal/hebcal-nodejs && npm install
-  - cd /home/hebcal/hebcal-nodejs && npm run build
+  - git clone https://github.com/mjradwin/hebcal-shabbat-email.git /home/hebcal/hebcal-shabbat-email
+  - cd /home/hebcal/hebcal-shabbat-email && npm install
+  - cd /home/hebcal/hebcal-shabbat-email && npm run build
   - curl -o /tmp/countryInfo.txt http://download.geonames.org/export/dump/countryInfo.txt
   - curl -o /tmp/admin1CodesASCII.txt http://download.geonames.org/export/dump/admin1CodesASCII.txt
   - curl -o /tmp/cities5000.zip http://download.geonames.org/export/dump/cities5000.zip
