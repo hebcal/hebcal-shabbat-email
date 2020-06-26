@@ -1,4 +1,3 @@
-import Database from 'better-sqlite3';
 import dayjs from 'dayjs';
 import fs from 'fs';
 import ini from 'ini';
@@ -8,8 +7,8 @@ import {flock} from 'fs-ext';
 import mysql from 'mysql';
 import nodemailer from 'nodemailer';
 import minimist from 'minimist';
+import {GeoDb} from '@hebcal/geo-sqlite';
 import {dirIfExistsOrCwd} from './makedb';
-const city2geonameid = require('./city2geonameid.json');
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['dryrun', 'quiet', 'help'],
@@ -68,29 +67,28 @@ async function main() {
   await flock(lockfile, 'ex');
 
   const zipsFilename = 'zips.sqlite3';
-  logger.info(`Opening ${zipsFilename}...`);
-  const zipsDb = new Database(zipsFilename, {fileMustExist: true});
-
   const geonamesFilename = 'geonames.sqlite3';
-  logger.info(`Opening ${geonamesFilename}...`);
-  const geonamesDb = new Database(geonamesFilename, {fileMustExist: true});
+  const geoDb = new GeoDb(logger, zipsFilename, geonamesFilename);
 
-  parseAllConfigs(subs, zipsDb, geonamesDb);
+  parseAllConfigs(subs, geoDb);
 
-  zipsDb.close();
-  geonamesDb.close();
+  geoDb.close();
 
   logger.info(`Sorting ${subs.size} users by lat/long`);
   const cfgs = Array.from(subs.values());
   cfgs.sort((a, b) => {
-    if (a.longitude == b.longitude) {
-      if (a.latitude == b.latitude) {
-        return a.cityDescr.localeCompare(b.cityDescr);
+    const alon = a.location.getLongitude();
+    const blon = b.location.getLongitude();
+    if (alon == blon) {
+      const alat = a.location.getLatitude();
+      const blat = b.location.getLatitude();
+      if (alat == blat) {
+        return a.location.getName().localeCompare(b.location.getName());
       } else {
-        return a.latitude - b.latitude;
+        return alat - blat;
       }
     } else {
-      return b.longitude - a.longitude;
+      return blon - alon;
     }
   });
 
@@ -266,20 +264,17 @@ let prevSubjAndBody;
  * @return {string[]}
  */
 function getSubjectAndBody(cfg) {
-  if (prevCfg && cfg.m == prevCfg.m &&
-    ((cfg.geonameid && cfg.geonameid == prevCfg.geonameid) ||
-    (cfg.zip && cfg.zip == prevCfg.zip))) {
+  const location = cfg.location;
+  if (prevCfg && cfg.m == prevCfg.m && location.geoid == prevCfg.location.geoid) {
     return prevSubjAndBody;
   }
-  const location = new Location(cfg.latitude, cfg.longitude, cfg.il, cfg.tzid,
-      cfg.cityName, cfg.cc, cfg.zip || cfg.geonameid);
   const options = {
     start: midnight.toDate(),
     end: endOfWeek.toDate(),
     location: location,
     candlelighting: true,
     havdalahMins: cfg.m,
-    il: cfg.il,
+    il: location.getIsrael(),
     sedrot: true,
   };
   const events = hebcal.hebrewCalendar(options);
@@ -347,8 +342,7 @@ function genSubjectAndBody(events, options, cfg) {
       htmlBody += `<div><a href="${url}?${UTM_PARAM}">${desc}</a> occurs on ${occursOn}.</div>\n${BLANK}\n`;
     }
   }
-  const comma = cfg.cityDescr.indexOf(',');
-  const shortLocation = comma == -1 ? cfg.cityDescr : cfg.cityDescr.substring(0, comma);
+  const shortLocation = cfg.location.getShortName();
   let subject = '[shabbat]';
   if (sedra) subject += ` ${sedra} -`;
   subject += ' ' + shortLocation;
@@ -476,14 +470,10 @@ ${allSql}`;
         } else if (row.email_candles_geonameid) {
           cfg.geonameid = row.email_candles_geonameid;
         } else if (row.email_candles_city) {
-          const cityName = row.email_candles_city.replace(/\+/g, ' ');
-          const geonameid = city2geonameid[cityName];
-          if (geonameid) {
-            cfg.geonameid = geonameid;
-          } else {
-            logger.warn(`unknown city=${cityName} for to=${email}, id=${cfg.id}`);
-            continue;
-          }
+          cfg.legacyCity = row.email_candles_city.replace(/\+/g, ' ');
+        } else {
+          logger.warn(`no geographic key for to=${email}, id=${cfg.id}`);
+          continue;
         }
         subs.set(email, cfg);
       }
@@ -515,148 +505,44 @@ function loadSentLog(sentLogFilename) {
   return result;
 }
 
-// Zip-Codes.com TimeZone IDs
-const ZIPCODES_TZ_MAP = {
-  '0': 'UTC',
-  '4': 'America/Puerto_Rico', // Atlantic (GMT -04:00)
-  '5': 'America/New_York', //    Eastern  (GMT -05:00)
-  '6': 'America/Chicago', //     Central  (GMT -06:00)
-  '7': 'America/Denver', //      Mountain (GMT -07:00)
-  '8': 'America/Los_Angeles', // Pacific  (GMT -08:00)
-  '9': 'America/Anchorage', //   Alaska   (GMT -09:00)
-  '10': 'Pacific/Honolulu', //   Hawaii-Aleutian Islands (GMT -10:00)
-  '11': 'Pacific/Pago_Pago', //  American Samoa (GMT -11:00)
-  '13': 'Pacific/Funafuti', //   Marshall Islands (GMT +12:00)
-  '14': 'Pacific/Guam', //       Guam     (GMT +10:00)
-  '15': 'Pacific/Palau', //      Palau    (GMT +9:00)
-};
-
-/**
- * @param {string} state
- * @param {number} tz
- * @param {string} dst
- * @return {string}
- */
-function getUsaTzid(state, tz, dst) {
-  if (tz == 10 && state == 'AK') {
-    return 'America/Adak';
-  } else if (tz == 7 && state == 'AZ') {
-    return dst == 'Y' ? 'America/Denver' : 'America/Phoenix';
-  } else {
-    return ZIPCODES_TZ_MAP[tz];
-  }
-}
-
-/**
- * @param {string} name
- * @param {string} admin1
- * @param {string} country
- * @return {string}
- */
-function geonameCityDescr(name, admin1, country) {
-  if (country == 'United States') country = 'USA';
-  if (country == 'United Kingdom') country = 'UK';
-  let cityDescr = name;
-  if (admin1 && !admin1.startsWith(name) && country != 'Israel') {
-    cityDescr += ', ' + admin1;
-  }
-  if (country) {
-    cityDescr += ', ' + country;
-  }
-  return cityDescr;
-}
-
-const GEONAME_SQL = `SELECT
-  g.name as name,
-  g.asciiname as asciiname,
-  g.country as cc,
-  c.country as country,
-  a.asciiname as admin1,
-  g.latitude as latitude,
-  g.longitude as longitude,
-  g.timezone as timezone
-FROM geoname g
-LEFT JOIN country c on g.country = c.iso
-LEFT JOIN admin1 a on g.country||'.'||g.admin1 = a.key
-WHERE g.geonameid = ?
-`;
-
-const ZIPCODE_SQL = `SELECT CityMixedCase,State,Latitude,Longitude,TimeZone,DayLightSaving
-FROM ZIPCodes_Primary WHERE ZipCode = ?`;
-
 /**
  * Scans subs map and removes invalid entries
  * @param {string} to
  * @param {Object} cfg
- * @param {*} zipStmt
- * @param {*} geonamesStmt
+ * @param {GeoDb} geoDb
  * @return {boolean}
  */
-function parseConfig(to, cfg, zipStmt, geonamesStmt) {
-  if (cfg.zip) {
-    const result = zipStmt.get(cfg.zip);
-    if (!result) {
-      logger.warn(`unknown zipcode=${cfg.zip} for to=${to}, id=${cfg.id}`);
-      return false;
-    } else if (!result.Latitude && !result.Longitude) {
-      logger.warn(`zero lat/long zipcode=${cfg.zip} for to=${to}, id=${cfg.id}`);
-      return false;
-    }
-    cfg.latitude = result.Latitude;
-    cfg.longitude = result.Longitude;
-    cfg.tzid = getUsaTzid(result.State, result.TimeZone, result.DayLightSaving);
-    cfg.cc = 'US';
-    cfg.il = false;
-    cfg.cityDescr = `${result.CityMixedCase}, ${result.State} ${cfg.zip}`;
-  } else if (cfg.geonameid) {
-    const result = geonamesStmt.get(cfg.geonameid);
-    if (!result) {
-      logger.warn(`unknown geonameid=${cfg.geonameid} for to=${to}, id=${cfg.id}`);
-      return false;
-    }
-    cfg.latitude = result.latitude;
-    cfg.longitude = result.longitude;
-    cfg.tzid = result.timezone;
-    cfg.cc = result.cc;
-    const country = result.country || '';
-    const admin1 = result.admin1 || '';
-    cfg.cityName = result.name;
-    cfg.cityDescr = geonameCityDescr(result.asciiname, admin1, country);
-    if (country == 'Israel') {
-      cfg.il = true;
-      if (admin1.startsWith('Jerusalem') && result.name.startsWith('Jerualem')) {
-        cfg.jersualem = true;
-      }
-    }
-  } else {
-    logger.warn(`no geographic key in config for to=${to}, id=${cfg.id}`);
-    return false;
-  }
+function parseConfig(to, cfg, geoDb) {
+  const location = cfg.zip ? geoDb.lookupZip(cfg.zip) :
+    cfg.legacyCity ? geoDb.lookupLegacyCity(cfg.legacyCity) :
+    cfg.geonameid ? geoDb.lookupGeoname(cfg.geonameid) :
+    null;
 
-  if (!cfg.latitude || !cfg.longitude) {
+  if (!location) {
+    logger.warn('Skipping bad config: ' + JSON.stringify(cfg));
+    return false;
+  } else if (location.getLongitude() == 0 && location.getLongitude == 0) {
     logger.warn(`Suspicious zero lat/long for to=${to}, id=${cfg.id}`);
     return false;
-  } else if (!cfg.tzid) {
+  } else if (!location.getTzid()) {
     logger.warn(`Unknown tzid for to=${to}, id=${cfg.id}`);
     return false;
   }
 
+  cfg.location = location;
   return true;
 }
 
 /**
  * Scans subs map and removes invalid entries
  * @param {Map<string,any>} subs
- * @param {*} zipsDb
- * @param {*} geonamesDb
+ * @param {GeoDb} geoDb
  */
-function parseAllConfigs(subs, zipsDb, geonamesDb) {
+function parseAllConfigs(subs, geoDb) {
   logger.info('Parsing all configs');
-  const zipStmt = zipsDb.prepare(ZIPCODE_SQL);
-  const geonamesStmt = geonamesDb.prepare(GEONAME_SQL);
   const failures = [];
   for (const [to, cfg] of subs.entries()) {
-    if (!parseConfig(to, cfg, zipStmt, geonamesStmt)) {
+    if (!parseConfig(to, cfg, geoDb)) {
       failures.push(to);
     }
   }
