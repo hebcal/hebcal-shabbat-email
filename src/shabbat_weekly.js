@@ -1,7 +1,7 @@
 import dayjs from 'dayjs';
 import fs from 'fs';
 import ini from 'ini';
-import {flags, HDate, holidays, hebcal, Location, common} from '@hebcal/core';
+import {flags, HDate, HebrewCalendar, months} from '@hebcal/core';
 import pino from 'pino';
 import {flock} from 'fs-ext';
 import mysql from 'mysql';
@@ -33,7 +33,6 @@ const [midnight, endOfWeek] = getStartAndEnd(TODAY);
 
 const UTM_PARAM = 'utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=shabbat-' +
   dayjs(TODAY).format('YYYY-MM-DD');
-const months = common.months;
 const FORMAT_DOW_MONTH_DAY = 'dddd, MMMM D';
 
 main()
@@ -169,7 +168,7 @@ function msleep(n) {
  * @param {Date} d
  */
 function exitIfYomTov(d) {
-  const todayEvents = holidays.getHolidaysOnDate(new HDate(d)) || [];
+  const todayEvents = HebrewCalendar.getHolidaysOnDate(new HDate(d)) || [];
   const chag = todayEvents.find((ev) => ev.getFlags() & flags.CHAG);
   if (chag) {
     const desc = chag.getDesc();

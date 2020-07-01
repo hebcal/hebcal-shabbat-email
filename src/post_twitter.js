@@ -1,7 +1,7 @@
 import fs from 'fs';
 import Twitter from 'twitter';
 import ini from 'ini';
-import {Sedra, HDate, common, holidays, flags, ParshaEvent} from '@hebcal/core';
+import {Sedra, HebrewCalendar, HDate, flags, ParshaEvent} from '@hebcal/core';
 import pino from 'pino';
 import minimist from 'minimist';
 
@@ -117,7 +117,7 @@ function getShortUrl(ev) {
 /** @return {string} */
 function getDailyStatusText() {
   const hd = new HDate();
-  const todayEvents = holidays.getHolidaysOnDate(hd);
+  const todayEvents = HebrewCalendar.getHolidaysOnDate(hd);
   if (todayEvents) {
     for (const ev of todayEvents) {
       logger.info(`Today is ${ev.getDesc()}`);
@@ -127,7 +127,7 @@ function getDailyStatusText() {
       }
     }
   }
-  const tomorrowEvents = holidays.getHolidaysOnDate(hd.next());
+  const tomorrowEvents = HebrewCalendar.getHolidaysOnDate(hd.next());
   if (tomorrowEvents) {
     let statusText;
     for (const ev of tomorrowEvents) {
@@ -150,12 +150,12 @@ function getDailyStatusText() {
 
 /** @return {string} */
 function getShabbatStatusText() {
-  const hd = new HDate().onOrAfter(common.days.SAT);
+  const hd = new HDate().onOrAfter(6);
   const sedra = new Sedra(hd.getFullYear(), false);
   const parsha = sedra.getString(hd);
   let twitterStatus = `This week\'s #Torah portion is ${parsha}`;
 
-  const events = holidays.getHolidaysOnDate(hd);
+  const events = HebrewCalendar.getHolidaysOnDate(hd);
   if (events) {
     const specialShabbat = events.find((e) => e.getFlags() & flags.SPECIAL_SHABBAT);
     if (specialShabbat) {
