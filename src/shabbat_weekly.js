@@ -111,7 +111,8 @@ async function main() {
   let i = 0;
   for (const cfg of cfgs) {
     if ((i % 200 == 0) || i == count - 1) {
-      logger.info(`Sending mail #${i+1}/${count} (${cfg.cityDescr})`);
+      const cityDescr = cfg.location.getName();
+      logger.info(`Sending mail #${i+1}/${count} (${cityDescr})`);
     }
     const info = await mailUser(transporter, cfg);
     if (!argv.dryrun) {
@@ -202,8 +203,9 @@ function getMessage(cfg) {
   const encoded = encodeURIComponent(Buffer.from(cfg.email).toString('base64'));
   const unsubUrl = `https://www.hebcal.com/email/?e=${encoded}`;
 
+  const cityDescr = cfg.location.getName();
   const body = body0 + `
-These times are for ${cfg.cityDescr}.
+These times are for ${cityDescr}.
 
 Shabbat Shalom,
 hebcal.com
@@ -217,7 +219,7 @@ ${unsubUrl}
 <div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
 ${htmlBody0}
 <div style="font-size:16px">
-<div>These times are for ${cfg.cityDescr}.</div>
+<div>These times are for ${cityDescr}.</div>
 ${BLANK}
 <div>Shabbat Shalom!</div>
 ${BLANK}
