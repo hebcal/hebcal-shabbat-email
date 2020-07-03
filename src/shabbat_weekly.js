@@ -278,7 +278,7 @@ function getSubjectAndBody(cfg) {
     il: location.getIsrael(),
     sedrot: true,
   };
-  const events = hebcal.hebrewCalendar(options);
+  const events = HebrewCalendar.calendar(options);
   const subjAndBody = genSubjectAndBody(events, options, cfg);
   prevSubjAndBody = subjAndBody;
   prevCfg = cfg;
@@ -289,7 +289,7 @@ const BLANK = '<div>&nbsp;</div>';
 
 /**
  * @param {Event[]} events
- * @param {hebcal.HebcalOptions} options
+ * @param {HebrewCalendar.Options} options
  * @param {any} cfg
  * @return {string[]}
  */
@@ -308,7 +308,7 @@ function genSubjectAndBody(events, options, cfg) {
     const attrs = ev.getAttrs();
     const strtime = dt.format(FORMAT_DOW_MONTH_DAY);
     if (desc.startsWith('Candle lighting') || desc.startsWith('Havdalah')) {
-      const hourMin = hebcal.reformatTimeStr(attrs.eventTimeStr, 'pm', options);
+      const hourMin = HebrewCalendar.reformatTimeStr(attrs.eventTimeStr, 'pm', options);
       const shortDesc = desc.substring(0, desc.indexOf(':'));
       if (!firstCandles && shortDesc == 'Candle lighting') {
         firstCandles = hourMin;
@@ -325,7 +325,7 @@ function genSubjectAndBody(events, options, cfg) {
       let occursOn = strtime;
       const dow = dt.day();
       if (dow == 6 && !sedra && (mask & flags.CHAG || attrs.cholHaMoedDay)) {
-        sedra = hebcal.getHolidayBasename(desc);
+        sedra = HebrewCalendar.getHolidayBasename(desc);
       } else if (mask & flags.ROSH_CHODESH) {
         if (roshChodeshSeen) {
           continue;
@@ -363,7 +363,7 @@ function getSpecialNote(cfg, shortLocation) {
   const mm = hd.getMonth();
   const dd = hd.getDate();
   const yy = hd.getFullYear();
-  const purimMonth = common.hebLeapYear(yy) ? months.ADAR_II : months.ADAR_I;
+  const purimMonth = HDate.isLeapYear(yy) ? months.ADAR_II : months.ADAR_I;
 
   let note;
   if ((mm == months.AV && dd >= 15) || (mm == months.ELUL && dd >= 16)) {
