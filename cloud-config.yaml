@@ -73,7 +73,7 @@ write_files:
       3 13 * * 5 hebcal node $APPDIR/shabbat_deactivate.js --count 3
       # process Amazon SQS email bounces every 5 minutes
       */5 * * * * hebcal node $APPDIR/shabbat_bounce_sqs.js --quiet
-  - path: /etc/cron.d/hebcal
+  - path: /etc/postfix/main.cf
     permissions: '0644'
     content: |
       smtpd_banner = $myhostname ESMTP $mail_name (Ubuntu)
