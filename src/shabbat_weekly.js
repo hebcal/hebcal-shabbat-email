@@ -48,13 +48,13 @@ main()
  * Main event loop
  */
 async function main() {
-  const iniPath = argv.ini || '/home/hebcal/local/etc/hebcal-dot-com.ini';
+  const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
   logger.info(`Reading ${iniPath}...`);
   const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
   const subs = await loadSubs(config, argv._);
   logger.info(`Loaded ${subs.size} users`);
 
-  const logdir = await dirIfExistsOrCwd('/home/hebcal/local/var/log');
+  const logdir = await dirIfExistsOrCwd('/var/log/hebcal');
   const sentLogFilename = logdir + '/shabbat-' + TODAY0.format('YYYYMMDD');
 
   const alreadySent = loadSentLog(sentLogFilename);
@@ -65,8 +65,9 @@ async function main() {
   const lockfile = fs.openSync('/tmp/hebcal-shabbat-weekly.lock', 'w');
   await flock(lockfile, 'ex');
 
-  const zipsFilename = 'zips.sqlite3';
-  const geonamesFilename = 'geonames.sqlite3';
+  const dbdir = await dirIfExistsOrCwd('/usr/lib/hebcal');
+  const zipsFilename = `${dbdir}/zips.sqlite3`;
+  const geonamesFilename = `${dbdir}/geonames.sqlite3`;
   const geoDb = new GeoDb(logger, zipsFilename, geonamesFilename);
 
   parseAllConfigs(subs, geoDb);

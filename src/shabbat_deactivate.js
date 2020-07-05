@@ -21,7 +21,7 @@ const logger = pino({
   level: argv.quiet ? 'warn' : 'info',
   prettyPrint: {translateTime: true, ignore: 'pid,hostname'},
 });
-const iniPath = argv.ini || '/home/hebcal/local/etc/hebcal-dot-com.ini';
+const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 let logdir;
 
@@ -36,7 +36,7 @@ main(argv.sleeptime)
 
 async function main() {
   const db = makeDb(config);
-  logdir = await dirIfExistsOrCwd('/home/hebcal/local/var/log');
+  logdir = await dirIfExistsOrCwd('/var/log/hebcal');
   const addrs = await getCandidates(db);
   logger.info(`Deactivating ${addrs.length} subscriptions`);
   if (!argv.dryrun && addrs.length) {

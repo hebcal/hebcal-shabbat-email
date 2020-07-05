@@ -105,7 +105,6 @@ write_files:
       smtp_sasl_security_options = noanonymous
       smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
 
-
 runcmd:
   - service netfilter-persistent flush
   - iptables -F
@@ -143,6 +142,8 @@ runcmd:
   - curl -o /tmp/IL.zip http://download.geonames.org/export/dump/IL.zip
   - cd /tmp && unzip cities5000.zip
   - cd /tmp && unzip IL.zip
+  - mkdir --mode=0775 /var/log/hebcal
+  - chown hebcal:hebcal /var/log/hebcal
   - mkdir -p /home/hebcal/local
   - cd /home/hebcal/local
   - mkdir -p bin etc var/log
