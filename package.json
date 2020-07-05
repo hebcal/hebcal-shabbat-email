@@ -27,13 +27,13 @@
     "@babel/core": "^7.10.4",
     "@babel/preset-env": "^7.10.4",
     "@babel/register": "^7.10.4",
-    "eslint": "^7.3.1",
+    "eslint": "^7.4.0",
     "eslint-config-google": "^0.14.0"
   },
   "dependencies": {
-    "@hebcal/core": "^2.00",
+    "@hebcal/core": "^2.0.1",
     "@hebcal/geo-sqlite": "^2.0.0",
-    "@hebcal/icalendar": "^2.0.0",
+    "@hebcal/icalendar": "^2.0.1",
     "@hebcal/leyning": "^2.0.0",
     "aws-sdk": "^2.709.0",
     "better-sqlite3": "^7.1.0",
