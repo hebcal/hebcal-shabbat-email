@@ -4,7 +4,7 @@ import ini from 'ini';
 import {flags, HDate, HebrewCalendar, months} from '@hebcal/core';
 import pino from 'pino';
 import {flock} from 'fs-ext';
-import mysql from 'mysql';
+import mysql from 'mysql2';
 import nodemailer from 'nodemailer';
 import minimist from 'minimist';
 import {GeoDb} from '@hebcal/geo-sqlite';
