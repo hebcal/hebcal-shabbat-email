@@ -28,7 +28,9 @@ const logger = pino({
 
 const TODAY0 = dayjs(argv.date); // undefined => new Date()
 const TODAY = TODAY0.toDate();
-exitIfYomTov(TODAY);
+if (!shouldSendEmailToday(TODAY0)) {
+  process.exit(0);
+}
 const [midnight, endOfWeek] = getStartAndEnd(TODAY);
 
 const UTM_PARAM = 'utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=shabbat-' +
@@ -55,7 +57,9 @@ async function main() {
   logger.info(`Loaded ${subs.size} users`);
 
   const logdir = await dirIfExistsOrCwd('/var/log/hebcal');
-  const sentLogFilename = logdir + '/shabbat-' + TODAY0.format('YYYYMMDD');
+  const dow = TODAY0.day();
+  const friday = TODAY0.add(5 - dow, 'day');
+  const sentLogFilename = logdir + '/shabbat-' + friday.format('YYYYMMDD');
 
   const alreadySent = loadSentLog(sentLogFilename);
   logger.info(`Skipping ${alreadySent.size} users from previous run`);
@@ -167,16 +171,39 @@ function msleep(n) {
 
 /**
  * Bails out if today is a holiday
- * @param {Date} d
+ * @param {dayjs.Dayjs} today
+ * @return {boolean}
  */
-function exitIfYomTov(d) {
-  const todayEvents = HebrewCalendar.getHolidaysOnDate(new HDate(d)) || [];
-  const chag = todayEvents.find((ev) => ev.getFlags() & flags.CHAG);
+function shouldSendEmailToday(today) {
+  const chag = getChagOnDate(today);
   if (chag) {
     const desc = chag.getDesc();
-    logger.info(`Today is ${desc}; exiting due to holiday...`);
-    process.exit(0);
+    logger.debug(`Today is ${desc}; exiting due to holiday...`);
+    return false;
   }
+  switch (today.day()) {
+    case 4:
+      return true; // Normal case: today is Thursday and it is not yontiff
+    case 3:
+      // send email today (Wednedsay) because Thursday is yontiff
+      return Boolean(getChagOnDate(today.add(1, 'day')));
+    case 2:
+      // send email today (Tuesday) because Wed & Thurs are both yontiff
+      return (getChagOnDate(today.add(1, 'day')) && getChagOnDate(today.add(2, 'day')));
+    default:
+      // no email today - not Tue/Wed/Thu
+      return false;
+  }
+}
+
+/**
+ * @param {dayjs.Dayjs} d
+ * @return {Event}
+ */
+function getChagOnDate(d) {
+  const events = HebrewCalendar.getHolidaysOnDate(new HDate(d.toDate())) || [];
+  const chag = events.find((ev) => ev.getFlags() & flags.CHAG);
+  return chag;
 }
 
 /**
@@ -345,7 +372,7 @@ function genSubjectAndBody(events, options, cfg) {
     }
   }
   const shortLocation = cfg.location.getShortName();
-  let subject = '[shabbat]';
+  let subject = '🕯️';
   if (sedra) subject += ` ${sedra} -`;
   subject += ' ' + shortLocation;
   if (firstCandles) subject += ` candles ${firstCandles}`;
