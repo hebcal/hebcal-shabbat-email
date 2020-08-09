@@ -11,8 +11,8 @@ import {GeoDb} from '@hebcal/geo-sqlite';
 import {dirIfExistsOrCwd} from './makedb';
 
 const argv = minimist(process.argv.slice(2), {
-  boolean: ['dryrun', 'quiet', 'help'],
-  alias: {h: 'help', n: 'dryrun', q: 'quiet'},
+  boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose'],
+  alias: {h: 'help', n: 'dryrun', q: 'quiet', f: 'force', v: 'verbose'},
 });
 if (argv.help) {
   usage();
@@ -22,13 +22,13 @@ if (argv.help) {
 argv.sleeptime = typeof argv.sleeptime == 'undefined' ? 300 : +argv.sleeptime;
 
 const logger = pino({
-  level: argv.quiet ? 'warn' : 'info',
+  level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
   prettyPrint: {translateTime: true, ignore: 'pid,hostname'},
 });
 
 const TODAY0 = dayjs(argv.date); // undefined => new Date()
 const TODAY = TODAY0.toDate();
-if (!shouldSendEmailToday(TODAY0)) {
+if (!shouldSendEmailToday(TODAY0) && !argv.force) {
   process.exit(0);
 }
 const [midnight, endOfWeek] = getStartAndEnd(TODAY);
@@ -175,12 +175,14 @@ function msleep(n) {
  * @return {boolean}
  */
 function shouldSendEmailToday(today) {
+  const dowStr = today.format('dddd');
   const chag = getChagOnDate(today);
   if (chag) {
     const desc = chag.getDesc();
-    logger.debug(`Today is ${desc}; exiting due to holiday...`);
+    logger.debug(`Today is ${dowStr}, exiting due to ${desc}...`);
     return false;
   }
+  logger.debug(`Today is ${dowStr}`);
   switch (today.day()) {
     case 4:
       return true; // Normal case: today is Thursday and it is not yontiff
@@ -353,7 +355,7 @@ function genSubjectAndBody(events, options, cfg) {
       let occursOn = strtime;
       const dow = dt.day();
       if (dow == 6 && !sedra && (mask & flags.CHAG || attrs.cholHaMoedDay)) {
-        sedra = HebrewCalendar.getHolidayBasename(desc);
+        sedra = ev.basename();
       } else if (mask & flags.ROSH_CHODESH) {
         if (roshChodeshSeen) {
           continue;
