@@ -19,7 +19,7 @@ if (argv.help) {
   process.exit(1);
 }
 // allow sleeptime=0 for no sleep
-argv.sleeptime = typeof argv.sleeptime == 'undefined' ? 300 : +argv.sleeptime;
+argv.sleeptime = typeof argv.sleeptime === 'undefined' ? 300 : +argv.sleeptime;
 
 const logger = pino({
   level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
@@ -83,10 +83,10 @@ async function main() {
   cfgs.sort((a, b) => {
     const alon = a.location.getLongitude();
     const blon = b.location.getLongitude();
-    if (alon == blon) {
+    if (alon === blon) {
       const alat = a.location.getLatitude();
       const blat = b.location.getLatitude();
-      if (alat == blat) {
+      if (alat === blat) {
         return a.location.getName().localeCompare(b.location.getName());
       } else {
         return alat - blat;
@@ -115,7 +115,7 @@ async function main() {
   logger.info(`About to mail ${count} users`);
   let i = 0;
   for (const cfg of cfgs) {
-    if ((i % 200 == 0) || i == count - 1) {
+    if ((i % 200 === 0) || i === count - 1) {
       const cityDescr = cfg.location.getName();
       logger.info(`Sending mail #${i+1}/${count} (${cityDescr})`);
     }
@@ -296,7 +296,10 @@ let prevSubjAndBody;
  */
 function getSubjectAndBody(cfg) {
   const location = cfg.location;
-  if (prevCfg && cfg.m == prevCfg.m && location.geoid == prevCfg.location.geoid) {
+  if (prevCfg &&
+      cfg.m === prevCfg.m &&
+      cfg.M === prevCfg.M &&
+      location.geoid === prevCfg.location.geoid) {
     return prevSubjAndBody;
   }
   const options = {
@@ -304,10 +307,14 @@ function getSubjectAndBody(cfg) {
     end: endOfWeek.toDate(),
     location: location,
     candlelighting: true,
-    havdalahMins: cfg.m,
     il: location.getIsrael(),
     sedrot: true,
   };
+  if (cfg.M) {
+    options.havdalahTzeit = true;
+  } else {
+    options.havdalahMins = cfg.m;
+  }
   const events = HebrewCalendar.calendar(options);
   const subjAndBody = genSubjectAndBody(events, options, cfg);
   prevSubjAndBody = subjAndBody;
@@ -340,12 +347,12 @@ function genSubjectAndBody(events, options, cfg) {
     if (desc.startsWith('Candle lighting') || desc.startsWith('Havdalah')) {
       const hourMin = HebrewCalendar.reformatTimeStr(attrs.eventTimeStr, 'pm', options);
       const shortDesc = desc.substring(0, desc.indexOf(':'));
-      if (!firstCandles && shortDesc == 'Candle lighting') {
+      if (!firstCandles && shortDesc === 'Candle lighting') {
         firstCandles = hourMin;
       }
       body += `${shortDesc} is at ${hourMin} on ${strtime}\n`;
       htmlBody += `<div>${shortDesc} is at <strong>${hourMin}</strong> on ${strtime}.</div>\n${BLANK}\n`;
-    } else if (mask == flags.PARSHA_HASHAVUA) {
+    } else if (mask === flags.PARSHA_HASHAVUA) {
       sedra = desc.substring(desc.indexOf(' ') + 1);
       body += `This week's Torah portion is ${desc}\n`;
       const url = ev.url();
@@ -354,12 +361,12 @@ function genSubjectAndBody(events, options, cfg) {
     } else {
       let occursOn = strtime;
       const dow = dt.day();
-      if (dow == 6 && !sedra && (mask & flags.CHAG || attrs.cholHaMoedDay)) {
+      if (dow === 6 && !sedra && (mask & flags.CHAG || attrs.cholHaMoedDay)) {
         sedra = ev.basename();
       } else if (mask & flags.ROSH_CHODESH) {
         if (roshChodeshSeen) {
           continue;
-        } else if (hd.getDate() == 30) {
+        } else if (hd.getDate() === 30) {
           occursOn += ' and ' + dt.add(1, 'day').format(FORMAT_DOW_MONTH_DAY);
           roshChodeshSeen = true;
         }
@@ -396,49 +403,53 @@ function getSpecialNote(cfg, shortLocation) {
   const purimMonth = HDate.isLeapYear(yy) ? months.ADAR_II : months.ADAR_I;
 
   let note;
-  if ((mm == months.AV && dd >= 15) || (mm == months.ELUL && dd >= 16)) {
+  if ((mm === months.AV && dd >= 15) || (mm === months.ELUL && dd >= 16)) {
     // for the last two weeks of Av and the last week or two of Elul
     const nextYear = yy + 1;
     const fridgeLoc = cfg.zip ? `zip=${cfg.zip}` : `geonameid=${cfg.geonameid}`;
     const erevRH = dayjs(new HDate(1, months.TISHREI, nextYear).prev().greg());
     const strtime = erevRH.format(FORMAT_DOW_MONTH_DAY);
     let url = `https://www.hebcal.com/shabbat/fridge.cgi?${fridgeLoc}&amp;year=${nextYear}`;
-    if (cfg.m) url += `&amp;m=${cfg.m}`;
+    if (cfg.m) {
+      url += `&amp;m=${cfg.m}`;
+    } else if (cfg.M) {
+      url += `&amp;M=on`;
+    }
     url += `&amp;${UTM_PARAM}`;
     note = `Shana Tova! We wish you a happy and healthy New Year.
 Rosh Hashana ${nextYear} begins at sundown on ${strtime}. Print your <a
 style="color:#356635" href="${url}">${shortLocation} virtual refrigerator magnet</a>
 for candle candle lighting times and Parashat haShavuah on a compact 5x7 page.`;
-  } else if (mm == months.TISHREI && dd <= 9) {
+  } else if (mm === months.TISHREI && dd <= 9) {
     // between RH & YK
     const erevYK = dayjs(new HDate(9, months.TISHREI, yy).greg());
     const strtime = erevYK.format(FORMAT_DOW_MONTH_DAY);
     note = `G'mar Chatima Tova! We wish you a good inscription in the Book of Life.
 <a style="color:#356635" href="https://www.hebcal.com/holidays/yom-kippur?${UTM_PARAM}">Yom Kippur</a>
 begins at sundown on ${strtime}.`;
-  } else if ((mm == months.TISHREI && dd >= 17 && dd <= 21) || (mm == months.NISAN && dd >= 17 && dd <= 20)) {
-    const holiday = mm == months.TISHREI ? 'Sukkot' : 'Pesach';
+  } else if ((mm === months.TISHREI && dd >= 17 && dd <= 21) || (mm === months.NISAN && dd >= 17 && dd <= 20)) {
+    const holiday = mm === months.TISHREI ? 'Sukkot' : 'Pesach';
     note = `Moadim L'Simcha! We wish you a very happy ${holiday}.`;
-  } else if (mm == purimMonth && dd >= 2 && dd <= 10) {
+  } else if (mm === purimMonth && dd >= 2 && dd <= 10) {
     // show Purim greeting 1.5 weeks before
     const erevPurim = dayjs(new HDate(13, purimMonth, yy).greg());
     const strtime = erevPurim.format(FORMAT_DOW_MONTH_DAY);
     note = `Chag Purim Sameach!
 <a style="color:#356635" href="https://www.hebcal.com/holidays/purim?${UTM_PARAM}">Purim</a>
 begins at sundown on ${strtime}.`;
-  } else if ((mm == purimMonth && dd >= 17 && dd <= 25) || (mm == months.NISAN && dd >= 2 && dd <= 9)) {
+  } else if ((mm === purimMonth && dd >= 17 && dd <= 25) || (mm === months.NISAN && dd >= 2 && dd <= 9)) {
     // show Pesach greeting shortly after Purim and ~2 weeks before
     const erevPesach = dayjs(new HDate(14, months.NISAN, yy).greg());
     const strtime = erevPesach.format(FORMAT_DOW_MONTH_DAY);
     note = `Chag Kasher v'Sameach! We wish you a happy
 <a style="color:#356635" href="https://www.hebcal.com/holidays/pesach?${UTM_PARAM}">Passover</a>.
 Pesach begins at sundown on ${strtime}.`;
-  } else if (mm == months.KISLEV && dd >= 1 && dd <= 13) {
+  } else if (mm === months.KISLEV && dd >= 1 && dd <= 13) {
     // for the first 2 weeks of Kislev, show Chanukah greeting
     const erevChanukah = dayjs(new HDate(24, months.KISLEV, yy).greg());
     const dow = erevChanukah.day();
     const strtime = erevChanukah.format(FORMAT_DOW_MONTH_DAY);
-    const when = dow == 5 ? 'before sundown' : dow == 6 ? 'at nightfall' : 'at sundown';
+    const when = dow === 5 ? 'before sundown' : dow === 6 ? 'at nightfall' : 'at sundown';
     note = `Chag Urim Sameach! Light the first
 <a style="color:#356635" href="https://www.hebcal.com/holidays/chanukah?${UTM_PARAM}">Chanukah candle</a>
 ${when} on ${strtime}.`;
@@ -479,10 +490,11 @@ async function loadSubs(config, addrs) {
        email_candles_zipcode,
        email_candles_city,
        email_candles_geonameid,
-       email_candles_havdalah
+       email_candles_havdalah,
+       email_havdalah_tzeit
 FROM hebcal_shabbat_email
-WHERE hebcal_shabbat_email.email_status = 'active'
-AND hebcal_shabbat_email.email_ip IS NOT NULL
+WHERE email_status = 'active'
+AND email_ip IS NOT NULL
 ${allSql}`;
   logger.info(sql);
   return new Promise((resolve, reject) => {
@@ -495,6 +507,7 @@ ${allSql}`;
           id: row.email_id,
           email: email,
           m: row.email_candles_havdalah,
+          M: Boolean(row.email_havdalah_tzeit),
         };
         if (row.email_candles_zipcode) {
           cfg.zip = row.email_candles_zipcode;
@@ -552,7 +565,7 @@ function parseConfig(to, cfg, geoDb) {
   if (!location) {
     logger.warn('Skipping bad config: ' + JSON.stringify(cfg));
     return false;
-  } else if (location.getLongitude() == 0 && location.getLongitude == 0) {
+  } else if (location.getLongitude() === 0 && location.getLongitude === 0) {
     logger.warn(`Suspicious zero lat/long for to=${to}, id=${cfg.id}`);
     return false;
   } else if (!location.getTzid()) {
