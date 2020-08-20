@@ -1,27 +1,25 @@
 {
   "name": "hebcal-shabbat-email",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Weekly shabbat times email subscription management for hebcal.com",
   "main": "index.js",
   "scripts": {
-    "build": "npm run build:cp-json && npm run build:babel",
-    "build:babel": "babel src --out-dir dist",
-    "build:cp-json": "mkdir -p ./dist && cp ./src/*.json ./dist",
+    "build": "babel src --out-dir dist",
     "test": "echo \"OK: no test specified\" && exit 0"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mjradwin/hebcal-shabbat-email.git"
+    "url": "git+https://github.com/hebcal/hebcal-shabbat-email.git"
   },
   "keywords": [
     "hebcal"
   ],
-  "author": "Michael J. Radwin (https://github.com/mjradwin)",
+  "author": "Michael J. Radwin (https://github.com/hebcal)",
   "license": "BSD-2-Clause",
   "bugs": {
-    "url": "https://github.com/mjradwin/hebcal-shabbat-email/issues"
+    "url": "https://github.com/hebcal/hebcal-shabbat-email/issues"
   },
-  "homepage": "https://github.com/mjradwin/hebcal-shabbat-email#readme",
+  "homepage": "https://github.com/hebcal/hebcal-shabbat-email#readme",
   "devDependencies": {
     "@babel/cli": "^7.10.5",
     "@babel/core": "^7.11.4",
