@@ -299,6 +299,7 @@ function getSubjectAndBody(cfg) {
   if (prevCfg &&
       cfg.m === prevCfg.m &&
       cfg.M === prevCfg.M &&
+      cfg.b === prevCfg.b &&
       location.geoid === prevCfg.location.geoid) {
     return prevSubjAndBody;
   }
@@ -307,6 +308,7 @@ function getSubjectAndBody(cfg) {
     end: endOfWeek.toDate(),
     location: location,
     candlelighting: true,
+    candleLightingMins: cfg.b,
     il: location.getIsrael(),
     sedrot: true,
   };
@@ -491,7 +493,8 @@ async function loadSubs(config, addrs) {
        email_candles_city,
        email_candles_geonameid,
        email_candles_havdalah,
-       email_havdalah_tzeit
+       email_havdalah_tzeit,
+       email_sundown_candles
 FROM hebcal_shabbat_email
 WHERE email_status = 'active'
 AND email_ip IS NOT NULL
@@ -508,6 +511,7 @@ ${allSql}`;
           email: email,
           m: row.email_candles_havdalah,
           M: Boolean(row.email_havdalah_tzeit),
+          b: row.email_sundown_candles,
         };
         if (row.email_candles_zipcode) {
           cfg.zip = row.email_candles_zipcode;
