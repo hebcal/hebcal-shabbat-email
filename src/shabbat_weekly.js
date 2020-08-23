@@ -405,13 +405,13 @@ function getSpecialNote(cfg, shortLocation) {
   const purimMonth = HDate.isLeapYear(yy) ? months.ADAR_II : months.ADAR_I;
 
   let note;
-  if ((mm === months.AV && dd >= 15) || (mm === months.ELUL && dd >= 16)) {
-    // for the last two weeks of Av and the last week or two of Elul
+  if ((mm === months.AV && dd >= 16 && dd <= 26) || (mm === months.ELUL && dd >= 16 && dd <= 26)) {
+    // for a week or two in Av and the last week or two of Elul
     const nextYear = yy + 1;
     const fridgeLoc = cfg.zip ? `zip=${cfg.zip}` : `geonameid=${cfg.geonameid}`;
     const erevRH = dayjs(new HDate(1, months.TISHREI, nextYear).prev().greg());
     const strtime = erevRH.format(FORMAT_DOW_MONTH_DAY);
-    let url = `https://www.hebcal.com/shabbat/fridge.cgi?${fridgeLoc}&amp;year=${nextYear}`;
+    let url = `https://www.hebcal.com/shabbat/fridge.cgi?${fridgeLoc}&amp;b=${cfg.b}&amp;year=${nextYear}`;
     if (cfg.m) {
       url += `&amp;m=${cfg.m}`;
     } else if (cfg.M) {
