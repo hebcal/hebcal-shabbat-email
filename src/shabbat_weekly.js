@@ -339,6 +339,7 @@ function genSubjectAndBody(events, options, cfg) {
   let sedra;
   const holidaySeen = {};
   let roshChodeshSeen = false;
+  const urlSuffix = options.il ? '?i=on' : '';
   for (const ev of events) {
     const desc = ev.render();
     const hd = ev.getDate();
@@ -358,8 +359,9 @@ function genSubjectAndBody(events, options, cfg) {
       sedra = desc.substring(desc.indexOf(' ') + 1);
       body += `This week's Torah portion is ${desc}\n`;
       const url = ev.url();
-      body += `  ${url}\n`;
-      htmlBody += `<div>This week's Torah portion is <a href="${url}?${UTM_PARAM}">${desc}</a>.</div>\n${BLANK}\n`;
+      body += `  ${url}${urlSuffix}\n`;
+      const url2 = appendIsraelAndTracking(url, options.il);
+      htmlBody += `<div>This week's Torah portion is <a href="${url2}">${desc}</a>.</div>\n${BLANK}\n`;
     } else {
       let occursOn = strtime;
       const dow = dt.day();
@@ -376,10 +378,11 @@ function genSubjectAndBody(events, options, cfg) {
       body += `${desc} occurs on ${occursOn}\n`;
       const url = ev.url();
       if (url && !holidaySeen[url]) {
-        body += `  ${url}\n`;
+        body += `  ${url}${urlSuffix}\n`;
         holidaySeen[url] = true;
       }
-      htmlBody += `<div><a href="${url}?${UTM_PARAM}">${desc}</a> occurs on ${occursOn}.</div>\n${BLANK}\n`;
+      const url2 = appendIsraelAndTracking(url, options.il);
+      htmlBody += `<div><a href="${url2}">${desc}</a> occurs on ${occursOn}.</div>\n${BLANK}\n`;
     }
   }
   const shortLocation = cfg.location.getShortName();
@@ -390,6 +393,19 @@ function genSubjectAndBody(events, options, cfg) {
 
   const specialNote = getSpecialNote(cfg, shortLocation);
   return [subject, body, htmlBody, specialNote];
+}
+
+/**
+ * @param {string} url
+ * @param {boolean} il
+ * @return {string}
+ */
+function appendIsraelAndTracking(url, il) {
+  if (il) {
+    return `${url}?i=on&amp;${UTM_PARAM}`;
+  } else {
+    return `${url}?${UTM_PARAM}`;
+  }
 }
 
 /**
