@@ -61,9 +61,11 @@ async function main() {
   const friday = TODAY0.add(5 - dow, 'day');
   const sentLogFilename = logdir + '/shabbat-' + friday.format('YYYYMMDD');
 
-  const alreadySent = loadSentLog(sentLogFilename);
-  logger.info(`Skipping ${alreadySent.size} users from previous run`);
-  alreadySent.forEach((x) => subs.delete(x));
+  if (!argv.force) {
+    const alreadySent = loadSentLog(sentLogFilename);
+    logger.info(`Skipping ${alreadySent.size} users from previous run`);
+    alreadySent.forEach((x) => subs.delete(x));
+  }
 
   // open the database
   const lockfile = fs.openSync('/tmp/hebcal-shabbat-weekly.lock', 'w');
@@ -419,6 +421,13 @@ function getSpecialNote(cfg, shortLocation) {
   const dd = hd.getDate();
   const yy = hd.getFullYear();
   const purimMonth = HDate.isLeapYear(yy) ? months.ADAR_II : months.ADAR_I;
+  const gy = TODAY0.year();
+
+  // eslint-disable-next-line require-jsdoc
+  function makeUrl(holiday) {
+    const il = cfg.location.getIsrael();
+    return appendIsraelAndTracking(`https://www.hebcal.com/holidays/${holiday}-${gy}`, il);
+  }
 
   let note;
   if ((mm === months.AV && dd >= 16 && dd <= 26) || (mm === months.ELUL && dd >= 16 && dd <= 26)) {
@@ -443,7 +452,7 @@ for candle candle lighting times and Parashat haShavuah on a compact 5x7 page.`;
     const erevYK = dayjs(new HDate(9, months.TISHREI, yy).greg());
     const strtime = erevYK.format(FORMAT_DOW_MONTH_DAY);
     note = `G'mar Chatima Tova! We wish you a good inscription in the Book of Life.
-<a style="color:#356635" href="https://www.hebcal.com/holidays/yom-kippur?${UTM_PARAM}">Yom Kippur</a>
+<a style="color:#356635" href="${makeUrl('yom-kippur')}">Yom Kippur ${yy}</a>
 begins at sundown on ${strtime}.`;
   } else if ((mm === months.TISHREI && dd >= 17 && dd <= 21) || (mm === months.NISAN && dd >= 17 && dd <= 20)) {
     const holiday = mm === months.TISHREI ? 'Sukkot' : 'Pesach';
@@ -453,14 +462,14 @@ begins at sundown on ${strtime}.`;
     const erevPurim = dayjs(new HDate(13, purimMonth, yy).greg());
     const strtime = erevPurim.format(FORMAT_DOW_MONTH_DAY);
     note = `Chag Purim Sameach!
-<a style="color:#356635" href="https://www.hebcal.com/holidays/purim?${UTM_PARAM}">Purim</a>
+<a style="color:#356635" href="${makeUrl('purim')}">Purim ${yy}</a>
 begins at sundown on ${strtime}.`;
   } else if ((mm === purimMonth && dd >= 17 && dd <= 25) || (mm === months.NISAN && dd >= 2 && dd <= 9)) {
     // show Pesach greeting shortly after Purim and ~2 weeks before
     const erevPesach = dayjs(new HDate(14, months.NISAN, yy).greg());
     const strtime = erevPesach.format(FORMAT_DOW_MONTH_DAY);
     note = `Chag Kasher v'Sameach! We wish you a happy
-<a style="color:#356635" href="https://www.hebcal.com/holidays/pesach?${UTM_PARAM}">Passover</a>.
+<a style="color:#356635" href="${makeUrl('passover')}">Passover ${yy}</a>.
 Pesach begins at sundown on ${strtime}.`;
   } else if (mm === months.KISLEV && dd >= 1 && dd <= 13) {
     // for the first 2 weeks of Kislev, show Chanukah greeting
@@ -469,7 +478,7 @@ Pesach begins at sundown on ${strtime}.`;
     const strtime = erevChanukah.format(FORMAT_DOW_MONTH_DAY);
     const when = dow === 5 ? 'before sundown' : dow === 6 ? 'at nightfall' : 'at sundown';
     note = `Chag Urim Sameach! Light the first
-<a style="color:#356635" href="https://www.hebcal.com/holidays/chanukah?${UTM_PARAM}">Chanukah candle</a>
+<a style="color:#356635" href="${makeUrl('chanukah')}">Chanukah candle</a>
 ${when} on ${strtime}.`;
   }
 
