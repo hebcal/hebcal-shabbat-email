@@ -5,10 +5,10 @@ import {flags, HDate, HebrewCalendar, months} from '@hebcal/core';
 import pino from 'pino';
 import {flock} from 'fs-ext';
 import mysql from 'mysql2';
-import nodemailer from 'nodemailer';
 import minimist from 'minimist';
 import {GeoDb} from '@hebcal/geo-sqlite';
 import {dirIfExistsOrCwd} from './makedb';
+import {shouldSendEmailToday, makeTransporter} from './common';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose'],
@@ -28,6 +28,7 @@ const logger = pino({
 
 const TODAY0 = dayjs(argv.date); // undefined => new Date()
 const TODAY = TODAY0.toDate();
+logger.debug(`Today is ${TODAY0.format('dddd')}`);
 if (!shouldSendEmailToday(TODAY0) && !argv.force) {
   process.exit(0);
 }
@@ -98,20 +99,7 @@ async function main() {
     }
   });
 
-  // create reusable transporter object using the default SMTP transport
-  const transporter = nodemailer.createTransport({
-    host: config['hebcal.email.shabbat.host'],
-    port: 465,
-    secure: true,
-    auth: {
-      user: config['hebcal.email.shabbat.user'],
-      pass: config['hebcal.email.shabbat.password'],
-    },
-    tls: {
-      // do not fail on invalid certs
-      rejectUnauthorized: false,
-    },
-  });
+  const transporter = makeTransporter(config);
   const logStream = fs.createWriteStream(sentLogFilename, {flags: 'a'});
   const count = cfgs.length;
   logger.info(`About to mail ${count} users`);
@@ -172,45 +160,6 @@ function msleep(n) {
 }
 
 /**
- * Bails out if today is a holiday
- * @param {dayjs.Dayjs} today
- * @return {boolean}
- */
-function shouldSendEmailToday(today) {
-  const dowStr = today.format('dddd');
-  const chag = getChagOnDate(today);
-  if (chag) {
-    const desc = chag.getDesc();
-    logger.debug(`Today is ${dowStr}, exiting due to ${desc}...`);
-    return false;
-  }
-  logger.debug(`Today is ${dowStr}`);
-  switch (today.day()) {
-    case 4:
-      return true; // Normal case: today is Thursday and it is not yontiff
-    case 3:
-      // send email today (Wednedsay) because Thursday is yontiff
-      return Boolean(getChagOnDate(today.add(1, 'day')));
-    case 2:
-      // send email today (Tuesday) because Wed & Thurs are both yontiff
-      return (getChagOnDate(today.add(1, 'day')) && getChagOnDate(today.add(2, 'day')));
-    default:
-      // no email today - not Tue/Wed/Thu
-      return false;
-  }
-}
-
-/**
- * @param {dayjs.Dayjs} d
- * @return {Event}
- */
-function getChagOnDate(d) {
-  const events = HebrewCalendar.getHolidaysOnDate(new HDate(d.toDate())) || [];
-  const chag = events.find((ev) => ev.getFlags() & flags.CHAG);
-  return chag;
-}
-
-/**
  * mails the user
  * @param {nodemailer.Mail} transporter
  * @param {any} cfg
@@ -233,7 +182,7 @@ function getMessage(cfg) {
   const [subj, body0, htmlBody0, specialNote] = getSubjectAndBody(cfg);
 
   const encoded = encodeURIComponent(Buffer.from(cfg.email).toString('base64'));
-  const unsubUrl = `https://www.hebcal.com/email/?e=${encoded}`;
+  const unsubUrl = `https://www.hebcal.com/email?e=${encoded}`;
 
   const cityDescr = cfg.location.getName();
   const body = body0 + `

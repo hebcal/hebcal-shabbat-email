@@ -2,9 +2,9 @@
 import fs from 'fs';
 import ini from 'ini';
 import {makeDb, dirIfExistsOrCwd} from './makedb';
+import {makeTransporter} from './common';
 import pino from 'pino';
 import minimist from 'minimist';
-import nodemailer from 'nodemailer';
 import AWS from 'aws-sdk';
 
 const argv = minimist(process.argv.slice(2), {
@@ -29,15 +29,7 @@ const sqs = new AWS.SQS({
       config['hebcal.aws.secret_key']),
 });
 
-const transporter = nodemailer.createTransport({
-  host: config['hebcal.email.shabbat.host'],
-  port: 465,
-  secure: true,
-  auth: {
-    user: config['hebcal.email.shabbat.user'],
-    pass: config['hebcal.email.shabbat.password'],
-  },
-});
+const transporter = makeTransporter(config);
 
 main()
     .then(() => {

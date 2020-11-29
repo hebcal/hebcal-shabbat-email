@@ -4,7 +4,7 @@ import fs from 'fs';
 
 /**
  * Wraps a MySQL connection in promises
- * @param {Object} iniConfig
+ * @param {Object<string,string>} iniConfig
  * @return {Object}
  */
 export function makeDb(iniConfig) {
