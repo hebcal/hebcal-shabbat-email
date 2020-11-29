@@ -93,7 +93,6 @@ AND e.calendar_id = y.id`;
         const numYears = hyear - origHyear;
         const nth = Locale.ordinal(numYears);
         const id = row.id;
-        logger.info(`${id}.${num}.${hyear} - ${name} ${nth} ${type} ${diff} days (${origDay.format('YYYY-MM-DD')} => ${observed.format('YYYY-MM-DD')})`);
         const sqlSent = 'SELECT sent_date FROM yahrzeit_sent WHERE id = ? AND num = ? AND hyear = ?';
         // const sent = await db.query(sqlSent, [id, num, hyear]);
         const isYahrzeit = Boolean(type === 'Yahrzeit');
@@ -107,6 +106,8 @@ as the Yahrzeit begins.` : '';
         const hebdate = hd.render('en');
         // const emailAddress = row.email_addr;
         const emailAddress = 'michael@radwin.org';
+        const subject = makeSubject(typeStr, observed);
+        logger.info(`${id}.${num}.${hyear} - ${diff} days - ${subject}`);
         const msgid = `${id}.${num}.${hyear}.${new Date().getTime()}`;
         const returnPath = `yahrzeit-return+${id}.${num}@hebcal.com`;
         const unsubUrl = `https://www.hebcal.com/yahrzeit/unsub?id=${id}.${num}`;
@@ -114,7 +115,7 @@ as the Yahrzeit begins.` : '';
           to: emailAddress,
           from: 'Hebcal <shabbat-owner@hebcal.com>',
           replyTo: 'no-reply@hebcal.com',
-          subject: `${typeStr} Observance for ${observed.format('MMMM D')}`,
+          subject: subject,
           messageId: `<${msgid}@hebcal.com>`,
           headers: {
             'Return-Path': returnPath,
@@ -144,13 +145,31 @@ ${BLANK}
 </body></html>
 `,
         };
-        await transporter.sendMail(message);
+        if (!argv.dryrun) {
+          await transporter.sendMail(message);
+        }
         // return Promise.resolve({response: '250 OK', messageId: 'foo'});
       }
     }
   }
 
   db.close();
+}
+
+/**
+ * @param {string} type
+ * @param {dayjs.Dayjs} observed
+ * @return {string}
+ */
+function makeSubject(type, observed) {
+  const erev = observed.subtract(1, 'day');
+  const erevMon = erev.format('MMMM');
+  const erevDay = erev.format('D');
+  const obsMon = observed.format('MMMM');
+  const obsDay = observed.format('D');
+  const dateRange = (erevMon === obsMon) ?
+    `${erevMon} ${erevDay}-${obsDay}` : `${erevMon} ${erevDay}-${obsMon} ${obsDay}`;
+  return `${type} Observance for ${dateRange}`;
 }
 
 /**
@@ -209,4 +228,19 @@ function getYahrzeitDetailForId(query, id) {
     day = day.add(1, 'day');
   }
   return {dd, mm, yy, sunset, type, name, day};
+}
+
+// eslint-disable-next-line require-jsdoc
+function usage() {
+  const PROG = 'yahrzeit_email.js';
+  const usage = `Usage:
+    ${PROG} [options] [email_address...]
+
+Options:
+  --help           Help
+  --dryrun         Prints the actions that ${PROG} would take
+                     but does not remove anything
+  --quiet          Only emit warnings and errors
+`;
+  console.log(usage);
 }
