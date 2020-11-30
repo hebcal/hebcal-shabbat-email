@@ -21,6 +21,9 @@ const logger = pino({
   prettyPrint: {translateTime: true, ignore: 'pid,hostname'},
 });
 
+let transporter = null;
+let db = null;
+
 const today = dayjs(argv.date); // undefined => new Date()
 logger.debug(`Today is ${today.format('dddd')}`);
 if (!shouldSendEmailToday(today) && !argv.force) {
@@ -30,11 +33,12 @@ if (!shouldSendEmailToday(today) && !argv.force) {
 const BLANK = '<div>&nbsp;</div>';
 const UTM_PARAM = 'utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=yahrzeit-' +
   today.format('YYYY-MM-DD');
-const YAHRZEIT_POSTSCRIPT = `<div>
+const YAHRZEIT_POSTSCRIPT = `${BLANK}
+<div>
 May your loved one’s soul be bound up in the bond of eternal life and may their memory
 serve as a continued source of inspiration and comfort to you.
 </div>
-${BLANK}`;
+`;
 
 main()
     .then(() => {
@@ -46,6 +50,18 @@ main()
     });
 
 /**
+ * Sends the message via nodemailer, or no-op for dryrun
+ * @param {Object} message
+ */
+async function sendMail(message) {
+  if (argv.dryrun) {
+    return Promise.resolve({response: '250 OK', messageId: 'dryrun'});
+  } else {
+    return transporter.sendMail(message);
+  }
+}
+
+/**
  * Main event loop
  */
 async function main() {
@@ -53,8 +69,8 @@ async function main() {
   logger.info(`Reading ${iniPath}...`);
   const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 
-  const db = makeDb(config);
-  const transporter = makeTransporter(config);
+  db = makeDb(config);
+  transporter = makeTransporter(config);
 
   const sql = `SELECT e.id, e.email_addr, y.contents
 FROM yahrzeit_email e, yahrzeit y
@@ -71,70 +87,88 @@ AND e.calendar_id = y.id`;
   const hyear = new HDate(today.toDate()).getFullYear();
 
   for (const row of rows) {
-    const query = row.contents;
-    const maxId = getMaxYahrzeitId(query);
+    const contents = row.contents;
+    contents.id = row.id;
+    contents.emailAddress = row.email_addr;
+    const maxId = getMaxYahrzeitId(contents);
     for (let num = 1; num <= maxId; num++) {
-      const info = getYahrzeitDetailForId(query, num);
-      const type = info.type;
-      const origDay = info.day;
-      const origDt = origDay.toDate();
-      const hd = (type == 'Yahrzeit') ?
-        HebrewCalendar.getYahrzeit(hyear, origDt) :
-        HebrewCalendar.getBirthdayOrAnniversary(hyear, origDt);
-      if (!hd) {
-        continue;
-      }
-      const observed = dayjs(hd.greg());
-      const diff = observed.diff(today, 'd');
-      if (diff >= 0 && diff <= 7) {
-        const name = info.name;
-        const origHd = new HDate(origDt);
-        const origHyear = origHd.getFullYear();
-        const numYears = hyear - origHyear;
-        const nth = Locale.ordinal(numYears);
-        const id = row.id;
-        const sqlSent = 'SELECT sent_date FROM yahrzeit_sent WHERE id = ? AND num = ? AND hyear = ?';
-        // const sent = await db.query(sqlSent, [id, num, hyear]);
-        const isYahrzeit = Boolean(type === 'Yahrzeit');
-        const typeStr = isYahrzeit ? type : `Hebrew ${type}`;
-        const verb = isYahrzeit ? 'remembering' : 'honoring';
-        const postscript = isYahrzeit ? YAHRZEIT_POSTSCRIPT : '';
-        const erev = observed.subtract(1, 'day');
-        const lightCandle = isYahrzeit ? ` It is customary to light a memorial candle just before sundown on
-<time datetime="${erev.format('YYYY-MM-DD')}" style="color: #941003">${erev.format('dddd, MMMM D')}</time>
+      const status = await processAnniversary(contents, num, hyear);
+      logger.debug(status);
+    }
+  }
+
+  db.close();
+}
+
+/**
+ * @param {Object<string,string>} contents
+ * @param {number} num
+ * @param {number} hyear
+ */
+async function processAnniversary(contents, num, hyear) {
+  const info = getYahrzeitDetailForId(contents, num);
+  const id = contents.id;
+  const anniversaryId = `${id}.${num}.${hyear}`;
+  const type = info.type;
+  const origDay = info.day;
+  const origDt = origDay.toDate();
+  const hd = (type == 'Yahrzeit') ?
+    HebrewCalendar.getYahrzeit(hyear, origDt) :
+    HebrewCalendar.getBirthdayOrAnniversary(hyear, origDt);
+  if (!hd) {
+    return Promise.resolve({msg: `No anniversary for ${anniversaryId}`});
+  }
+  const observed = dayjs(hd.greg());
+  const diff = observed.diff(today, 'd');
+  if (diff < 0 || diff > 7) {
+    return Promise.resolve({msg: `Anniversary ${anniversaryId} occurs in ${diff} days`});
+  }
+  const name = info.name;
+  const origHd = new HDate(origDt);
+  const origHyear = origHd.getFullYear();
+  const numYears = hyear - origHyear;
+  const nth = Locale.ordinal(numYears);
+  const sqlSent = 'SELECT sent_date FROM yahrzeit_sent WHERE yahrzeit_id = ? AND num = ? AND hyear = ?';
+  const sent = await db.query(sqlSent, [id, num, hyear]);
+  if (sent && sent.length >= 1) {
+    return Promise.resolve({msg: `Message for ${anniversaryId} sent on ${sent[0].sent_date}`});
+  }
+  const isYahrzeit = Boolean(type === 'Yahrzeit');
+  const typeStr = isYahrzeit ? type : `Hebrew ${type}`;
+  const verb = isYahrzeit ? 'remembering' : 'honoring';
+  const postscript = isYahrzeit ? YAHRZEIT_POSTSCRIPT : '';
+  const erev = observed.subtract(1, 'day');
+  const lightCandle = isYahrzeit ? ` It is customary to light a memorial candle just before sundown on
+<time datetime="${erev.format('YYYY-MM-DD')}" style="color: #941003; white-space: nowrap">${erev.format('dddd, MMMM D')}</time>
 as the Yahrzeit begins.` : '';
-        const hebdate = hd.render('en');
-        // const emailAddress = row.email_addr;
-        const emailAddress = 'michael@radwin.org';
-        const subject = makeSubject(typeStr, observed);
-        logger.info(`${id}.${num}.${hyear} - ${diff} days - ${subject}`);
-        const msgid = `${id}.${num}.${hyear}.${new Date().getTime()}`;
-        const returnPath = `yahrzeit-return+${id}.${num}@hebcal.com`;
-        const unsubUrl = `https://www.hebcal.com/yahrzeit/unsub?id=${id}.${num}`;
-        const message = {
-          to: emailAddress,
-          from: 'Hebcal <shabbat-owner@hebcal.com>',
-          replyTo: 'no-reply@hebcal.com',
-          subject: subject,
-          messageId: `<${msgid}@hebcal.com>`,
-          headers: {
-            'Return-Path': returnPath,
-            'Errors-To': returnPath,
-          },
-          html: `<!DOCTYPE html><html><head><title>Hebcal Shabbat Times</title></head>
+  const hebdate = hd.render('en');
+  const emailAddress = contents.emailAddress;
+  const subject = makeSubject(typeStr, observed);
+  logger.info(`${anniversaryId} - ${diff} days - ${subject}`);
+  const msgid = `${anniversaryId}.${new Date().getTime()}`;
+  const returnPath = `yahrzeit-return+${id}.${num}@hebcal.com`;
+  const unsubUrl = `https://www.hebcal.com/yahrzeit/unsub?id=${id}.${num}`;
+  const message = {
+    to: emailAddress,
+    from: 'Hebcal <shabbat-owner@hebcal.com>',
+    replyTo: 'no-reply@hebcal.com',
+    subject: subject,
+    messageId: `<${msgid}@hebcal.com>`,
+    headers: {
+      'Return-Path': returnPath,
+      'Errors-To': returnPath,
+    },
+    html: `<!DOCTYPE html><html><head><title>Hebcal Shabbat Times</title></head>
 <div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
-<div>Hebcal joins you in ${verb} ${name} whose ${nth} ${typeStr} occurs on
-<time datetime="${observed.format('YYYY-MM-DD')}" style="color: #941003">${observed.format('dddd, MMMM D')}</time>,
+<div>Hebcal joins you in ${verb} ${name}, whose ${nth} ${typeStr} occurs on
+<time datetime="${observed.format('YYYY-MM-DD')}" style="color: #941003; white-space: nowrap">${observed.format('dddd, MMMM D')}</time>,
 corresponding to the ${hebdate}.</div>
 ${BLANK}
 <div>${typeStr} begins at sundown on the previous day and continues until sundown on the day
 of observance.${lightCandle}</div>
-${BLANK}
 ${postscript}
-<div>Regards,
-<br>The Hebcal.com team</div>
-${BLANK}
 </div>
+${BLANK}
 <div style="font-size:11px;color:#999;font-family:arial,helvetica,sans-serif">
 <div>This email was sent to ${emailAddress} by <a href="https://www.hebcal.com/?${UTM_PARAM}">Hebcal.com</a>.
 Hebcal is a free Jewish calendar and holiday web site.</div>
@@ -144,16 +178,13 @@ ${BLANK}
 </div>
 </body></html>
 `,
-        };
-        if (!argv.dryrun) {
-          await transporter.sendMail(message);
-        }
-        // return Promise.resolve({response: '250 OK', messageId: 'foo'});
-      }
-    }
-  }
+  };
+  await sendMail(message);
 
-  db.close();
+  if (!argv.dryrun) {
+    const sqlUpdate = 'INSERT INTO yahrzeit_sent (yahrzeit_id, num, hyear, sent_date) VALUES (?, ?, ?, NOW())';
+    await db.query(sqlUpdate, [id, num, hyear]);
+  }
 }
 
 /**
