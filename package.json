@@ -31,7 +31,7 @@
   "dependencies": {
     "@hebcal/core": "^2.7.0",
     "@hebcal/geo-sqlite": "^2.4.0",
-    "aws-sdk": "^2.799.0",
+    "aws-sdk": "^2.802.0",
     "better-sqlite3": "^7.1.1",
     "dayjs": "^1.9.6",
     "fs-ext": "^2.0.0",

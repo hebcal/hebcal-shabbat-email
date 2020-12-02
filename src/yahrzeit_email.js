@@ -155,7 +155,7 @@ as the Yahrzeit begins.` : '';
   logger.info(`${anniversaryId} - ${diff} days - ${subject}`);
   const msgid = `${anniversaryId}.${new Date().getTime()}`;
   const returnPath = `yahrzeit-return+${id}.${num}@hebcal.com`;
-  const unsubUrl = `https://www.hebcal.com/yahrzeit/email?id=${id}&num=${num}&unsubscribe=1&commit=1`;
+  const unsubUrl = `https://www.hebcal.com/yahrzeit/email?id=${id}&num=${num}&unsubscribe=1`;
   const message = {
     to: emailAddress,
     from: 'Hebcal <shabbat-owner@hebcal.com>',
@@ -166,7 +166,7 @@ as the Yahrzeit begins.` : '';
       'Return-Path': returnPath,
       'Errors-To': returnPath,
       'List-ID': `<${id}.${num}.list-id.hebcal.com>`,
-      'List-Unsubscribe': `<${unsubUrl}>`,
+      'List-Unsubscribe': `<${unsubUrl}&commit=1&cfg=json>`,
       'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
     },
     html: `<!DOCTYPE html><html><head><title>${subject}</title></head>
@@ -184,7 +184,7 @@ ${BLANK}
 <div>This email was sent to ${emailAddress} by <a href="https://www.hebcal.com/?${UTM_PARAM}">Hebcal.com</a>.
 Hebcal is a free Jewish calendar and holiday web site.</div>
 ${BLANK}
-<div><a href="${unsubUrl}&amp;unsubscribe=1&amp;${UTM_PARAM}">Unsubscribe</a> |
+<div><a href="${unsubUrl}&amp;cfg=html&amp;${UTM_PARAM}">Unsubscribe</a> |
 <a href="https://www.hebcal.com/home/about/privacy-policy?${UTM_PARAM}">Privacy Policy</a></div>
 </div>
 </body></html>
