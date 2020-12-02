@@ -147,7 +147,7 @@ as the Yahrzeit begins.` : '';
   logger.info(`${anniversaryId} - ${diff} days - ${subject}`);
   const msgid = `${anniversaryId}.${new Date().getTime()}`;
   const returnPath = `yahrzeit-return+${id}.${num}@hebcal.com`;
-  const unsubUrl = `https://www.hebcal.com/yahrzeit/unsub?id=${id}.${num}`;
+  const unsubUrl = `https://www.hebcal.com/yahrzeit/email?id=${id}&num=${num}&unsubscribe=1&commit=1`;
   const message = {
     to: emailAddress,
     from: 'Hebcal <shabbat-owner@hebcal.com>',
@@ -157,8 +157,11 @@ as the Yahrzeit begins.` : '';
     headers: {
       'Return-Path': returnPath,
       'Errors-To': returnPath,
+      'List-ID': `<${id}.${num}.list-id.hebcal.com>`,
+      'List-Unsubscribe': `<${unsubUrl}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
     },
-    html: `<!DOCTYPE html><html><head><title>Hebcal Shabbat Times</title></head>
+    html: `<!DOCTYPE html><html><head><title>${subject}</title></head>
 <div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
 <div>Hebcal joins you in ${verb} ${name}, whose ${nth} ${typeStr} occurs on
 <time datetime="${observed.format('YYYY-MM-DD')}" style="color: #941003; white-space: nowrap">${observed.format('dddd, MMMM D')}</time>,
