@@ -41,9 +41,14 @@ serve as a continued source of inspiration and comfort to you.
 </div>
 `;
 
+let numSent = 0;
+
 main()
     .then(() => {
-      logger.info('Success!');
+      if (numSent > 0) {
+        logger.info(`Success! Sent ${numSent} messages.`);
+      }
+      logger.debug('Done.');
     })
     .catch((err) => {
       logger.fatal(err);
@@ -67,7 +72,7 @@ async function sendMail(message) {
  */
 async function main() {
   const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
-  logger.info(`Reading ${iniPath}...`);
+  logger.debug(`Reading ${iniPath}...`);
   const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 
   db = makeDb(config);
@@ -78,6 +83,7 @@ FROM yahrzeit_email e, yahrzeit y
 WHERE e.sub_status = 'active'
 AND e.calendar_id = y.id`;
 
+  logger.debug(sql);
   const rows = await db.query(sql);
   if (!rows || !rows.length) {
     logger.error('Got zero rows from DB!?');
@@ -130,6 +136,7 @@ async function processAnniversary(contents, num, hyear) {
   const numYears = hyear - origHyear;
   const nth = Locale.ordinal(numYears);
   const sqlSent = 'SELECT sent_date FROM yahrzeit_sent WHERE yahrzeit_id = ? AND num = ? AND hyear = ?';
+  logger.debug(sqlSent);
   const sent = await db.query(sqlSent, [id, num, hyear]);
   if (sent && sent.length >= 1) {
     return Promise.resolve({msg: `Message for ${anniversaryId} sent on ${sent[0].sent_date}`});
@@ -187,8 +194,11 @@ ${BLANK}
 
   if (!argv.dryrun) {
     const sqlUpdate = 'INSERT INTO yahrzeit_sent (yahrzeit_id, num, hyear, sent_date) VALUES (?, ?, ?, NOW())';
+    logger.debug(sqlUpdate);
     await db.query(sqlUpdate, [id, num, hyear]);
   }
+
+  numSent++;
 }
 
 /**
