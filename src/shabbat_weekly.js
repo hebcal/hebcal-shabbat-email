@@ -219,6 +219,7 @@ ${BLANK}
   const msgid = cfg.id + '.' + new Date().getTime();
   const unsubAddr = `shabbat-unsubscribe+${cfg.id}@hebcal.com`;
   const returnPath = 'shabbat-return+' + cfg.email.replace('@', '=') + '@hebcal.com';
+  const unsub1click = `https://www.hebcal.com/email?em=${encodeURIComponent(cfg.email)}&unsubscribe=1&v=1&cfg=json`;
   const message = {
     from: 'Hebcal <shabbat-owner@hebcal.com>',
     replyTo: 'no-reply@hebcal.com',
@@ -228,7 +229,8 @@ ${BLANK}
     headers: {
       'Return-Path': returnPath,
       'Errors-To': returnPath,
-      'List-Unsubscribe': `<mailto:${unsubAddr}>`,
+      'List-Unsubscribe': `<${unsub1click}>, <mailto:${unsubAddr}?subject=unsubscribe>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
       'List-Id': '<shabbat.hebcal.com>',
     },
     text: body,
