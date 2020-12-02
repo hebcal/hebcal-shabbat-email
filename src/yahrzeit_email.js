@@ -5,7 +5,7 @@ import {HDate, HebrewCalendar, Locale} from '@hebcal/core';
 import pino from 'pino';
 import minimist from 'minimist';
 import {makeDb} from './makedb';
-import {shouldSendEmailToday, makeTransporter} from './common';
+import {getChagOnDate, makeTransporter} from './common';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose'],
@@ -26,7 +26,8 @@ let db = null;
 
 const today = dayjs(argv.date); // undefined => new Date()
 logger.debug(`Today is ${today.format('dddd')}`);
-if (!shouldSendEmailToday(today) && !argv.force) {
+const chag = getChagOnDate(today);
+if ((chag || today.day() === 6) && !argv.force) {
   process.exit(0);
 }
 
