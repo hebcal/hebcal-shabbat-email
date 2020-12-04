@@ -130,17 +130,14 @@ async function processAnniversary(contents, num, hyear) {
   if (diff < 0 || diff > 7) {
     return Promise.resolve({msg: `Anniversary ${anniversaryId} occurs in ${diff} days`});
   }
-  const name = info.name;
-  const origHd = new HDate(origDt);
-  const origHyear = origHd.getFullYear();
-  const numYears = hyear - origHyear;
-  const nth = Locale.ordinal(numYears);
   const sqlSent = 'SELECT sent_date FROM yahrzeit_sent WHERE yahrzeit_id = ? AND num = ? AND hyear = ?';
   logger.debug(sqlSent);
   const sent = await db.query(sqlSent, [id, num, hyear]);
   if (sent && sent.length >= 1) {
     return Promise.resolve({msg: `Message for ${anniversaryId} sent on ${sent[0].sent_date}`});
   }
+  const name = info.name;
+  const nth = calculateAnniversaryNth(origDt, hyear);
   const isYahrzeit = Boolean(type === 'Yahrzeit');
   const typeStr = isYahrzeit ? type : `Hebrew ${type}`;
   const verb = isYahrzeit ? 'remembering' : 'honoring';
@@ -199,6 +196,19 @@ ${BLANK}
   }
 
   numSent++;
+}
+
+/**
+ * @param {Date} origDt
+ * @param {number} hyear
+ * @return {string}
+ */
+function calculateAnniversaryNth(origDt, hyear) {
+  const origHd = new HDate(origDt);
+  const origHyear = origHd.getFullYear();
+  const numYears = hyear - origHyear;
+  const nth = Locale.ordinal(numYears);
+  return nth;
 }
 
 /**
