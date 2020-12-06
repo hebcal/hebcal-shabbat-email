@@ -40,6 +40,7 @@ May your loved one’s soul be bound up in the bond of eternal life and may thei
 serve as a continued source of inspiration and comfort to you.
 </div>
 `;
+const DATE_STYLE = `style="color: #941003; white-space: nowrap"`;
 
 let numSent = 0;
 
@@ -114,19 +115,18 @@ AND e.calendar_id = y.id`;
  */
 async function processAnniversary(contents, num, hyear) {
   const info = getYahrzeitDetailForId(contents, num);
-  const id = contents.id;
-  const anniversaryId = `${id}.${num}.${hyear}`;
+  const id = info.id = contents.id;
+  const anniversaryId = info.anniversaryId = `${id}.${num}.${hyear}`;
   const type = info.type;
-  const origDay = info.day;
-  const origDt = origDay.toDate();
-  const hd = (type == 'Yahrzeit') ?
+  const origDt = info.day.toDate();
+  const hd = info.hd = (type == 'Yahrzeit') ?
     HebrewCalendar.getYahrzeit(hyear, origDt) :
     HebrewCalendar.getBirthdayOrAnniversary(hyear, origDt);
   if (!hd) {
     return Promise.resolve({msg: `No anniversary for ${anniversaryId}`});
   }
-  const observed = dayjs(hd.greg());
-  const diff = observed.diff(today, 'd');
+  const observed = info.observed = dayjs(hd.greg());
+  const diff = info.diff = observed.diff(today, 'd');
   if (diff < 0 || diff > 7) {
     return Promise.resolve({msg: `Anniversary ${anniversaryId} occurs in ${diff} days`});
   }
@@ -136,23 +136,46 @@ async function processAnniversary(contents, num, hyear) {
   if (sent && sent.length >= 1) {
     return Promise.resolve({msg: `Message for ${anniversaryId} sent on ${sent[0].sent_date}`});
   }
-  const name = info.name;
-  const nth = calculateAnniversaryNth(origDt, hyear);
+
+  info.num = num;
+  info.emailAddress = contents.emailAddress;
+  info.hyear = hyear;
+  const message = makeMessage(info);
+  await sendMail(message);
+
+  if (!argv.dryrun) {
+    const sqlUpdate = 'INSERT INTO yahrzeit_sent (yahrzeit_id, num, hyear, sent_date) VALUES (?, ?, ?, NOW())';
+    logger.debug(sqlUpdate);
+    await db.query(sqlUpdate, [id, num, hyear]);
+  }
+
+  numSent++;
+}
+
+/**
+ * @param {any} info
+ * @return {any}
+ */
+function makeMessage(info) {
+  const type = info.type;
   const isYahrzeit = Boolean(type === 'Yahrzeit');
   const typeStr = isYahrzeit ? type : `Hebrew ${type}`;
+  const observed = info.observed;
+  const subject = makeSubject(typeStr, observed);
+  logger.info(`${info.anniversaryId} - ${info.diff} days - ${subject}`);
   const verb = isYahrzeit ? 'remembering' : 'honoring';
   const postscript = isYahrzeit ? YAHRZEIT_POSTSCRIPT : '';
   const erev = observed.subtract(1, 'day');
   const lightCandle = isYahrzeit ? ` It is customary to light a memorial candle just before sundown on
-<time datetime="${erev.format('YYYY-MM-DD')}" style="color: #941003; white-space: nowrap">${erev.format('dddd, MMMM D')}</time>
+<time datetime="${erev.format('YYYY-MM-DD')}" ${DATE_STYLE}>${erev.format('dddd, MMMM D')}</time>
 as the Yahrzeit begins.` : '';
-  const hebdate = hd.render('en');
-  const emailAddress = contents.emailAddress;
-  const subject = makeSubject(typeStr, observed);
-  logger.info(`${anniversaryId} - ${diff} days - ${subject}`);
-  const msgid = `${anniversaryId}.${new Date().getTime()}`;
-  const returnPath = `yahrzeit-return+${id}.${num}@hebcal.com`;
-  const unsubUrl = `https://www.hebcal.com/yahrzeit/email?id=${id}&num=${num}&unsubscribe=1`;
+  const hebdate = info.hd.render('en');
+  const origDt = info.day.toDate();
+  const nth = calculateAnniversaryNth(origDt, info.hyear);
+  const msgid = `${info.anniversaryId}.${new Date().getTime()}`;
+  const returnPath = `yahrzeit-return+${info.id}.${info.num}@hebcal.com`;
+  const unsubUrl = `https://www.hebcal.com/yahrzeit/email?id=${info.id}&num=${info.num}&unsubscribe=1`;
+  const emailAddress = info.emailAddress;
   const message = {
     to: emailAddress,
     from: 'Hebcal <shabbat-owner@hebcal.com>',
@@ -162,14 +185,14 @@ as the Yahrzeit begins.` : '';
     headers: {
       'Return-Path': returnPath,
       'Errors-To': returnPath,
-      'List-ID': `<${id}.${num}.list-id.hebcal.com>`,
+      'List-ID': `<${info.id}.${info.num}.list-id.hebcal.com>`,
       'List-Unsubscribe': `<${unsubUrl}&commit=1&cfg=json>`,
       'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
     },
     html: `<!DOCTYPE html><html><head><title>${subject}</title></head>
 <div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
-<div>Hebcal joins you in ${verb} ${name}, whose ${nth} ${typeStr} occurs on
-<time datetime="${observed.format('YYYY-MM-DD')}" style="color: #941003; white-space: nowrap">${observed.format('dddd, MMMM D')}</time>,
+<div>Hebcal joins you in ${verb} ${info.name}, whose ${nth} ${typeStr} occurs on
+<time datetime="${observed.format('YYYY-MM-DD')}" ${DATE_STYLE}>${observed.format('dddd, MMMM D')}</time>,
 corresponding to the ${hebdate}.</div>
 ${BLANK}
 <div>${typeStr} begins at sundown on the previous day and continues until sundown on the day
@@ -187,15 +210,7 @@ ${BLANK}
 </body></html>
 `,
   };
-  await sendMail(message);
-
-  if (!argv.dryrun) {
-    const sqlUpdate = 'INSERT INTO yahrzeit_sent (yahrzeit_id, num, hyear, sent_date) VALUES (?, ?, ?, NOW())';
-    logger.debug(sqlUpdate);
-    await db.query(sqlUpdate, [id, num, hyear]);
-  }
-
-  numSent++;
+  return message;
 }
 
 /**
