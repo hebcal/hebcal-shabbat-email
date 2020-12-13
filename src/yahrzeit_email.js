@@ -91,16 +91,20 @@ AND e.calendar_id = y.id`;
     db.close();
     return;
   }
+  logger.debug(`Got ${rows.length} active subscriptions from DB`);
 
   const hyear = new HDate(today.toDate()).getFullYear();
+  const sent = await loadRecentSent();
+  logger.trace(JSON.stringify(sent));
 
   for (const row of rows) {
     const contents = row.contents;
     contents.id = row.id;
     contents.emailAddress = row.email_addr;
     const maxId = getMaxYahrzeitId(contents);
+    logger.debug(`${contents.id} ${contents.emailAddress} ${maxId}`);
     for (let num = 1; num <= maxId; num++) {
-      const status = await processAnniversary(contents, num, hyear);
+      const status = await processAnniversary(contents, num, hyear, sent);
       logger.debug(status);
     }
   }
@@ -109,11 +113,32 @@ AND e.calendar_id = y.id`;
 }
 
 /**
+ * @return {any}
+ */
+async function loadRecentSent() {
+  const sql = `SELECT yahrzeit_id, num, hyear, sent_date
+FROM yahrzeit_sent
+WHERE datediff(NOW(), sent_date) < 10`;
+  logger.debug(sql);
+  const rows = await db.query(sql);
+  logger.debug(`Got ${rows.length} recent sent from DB`);
+  const sent = {};
+  if (rows && rows.length) {
+    for (const row of rows) {
+      const key = `${row.yahrzeit_id}.${row.num}.${row.hyear}`;
+      sent[key] = row.sent_date;
+    }
+  }
+  return sent;
+}
+
+/**
  * @param {Object<string,string>} contents
  * @param {number} num
  * @param {number} hyear
+ * @param {any} sent
  */
-async function processAnniversary(contents, num, hyear) {
+async function processAnniversary(contents, num, hyear, sent) {
   const info = getYahrzeitDetailForId(contents, num);
   if (info === null) {
     return {msg: `Skipping blank ${contents.id}.${num}`};
@@ -133,11 +158,8 @@ async function processAnniversary(contents, num, hyear) {
   if (diff < 0 || diff > 7) {
     return {msg: `Anniversary ${anniversaryId} occurs in ${diff} days`};
   }
-  const sqlSent = 'SELECT sent_date FROM yahrzeit_sent WHERE yahrzeit_id = ? AND num = ? AND hyear = ?';
-  logger.debug(sqlSent);
-  const sent = await db.query(sqlSent, [id, num, hyear]);
-  if (sent && sent.length >= 1) {
-    return {msg: `Message for ${anniversaryId} sent on ${sent[0].sent_date}`};
+  if (typeof sent[anniversaryId] !== 'undefined') {
+    return {msg: `Message for ${anniversaryId} sent on ${sent[anniversaryId]}`};
   }
 
   info.num = num;
