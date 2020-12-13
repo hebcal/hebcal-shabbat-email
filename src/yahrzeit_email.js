@@ -62,7 +62,7 @@ main()
  */
 async function sendMail(message) {
   if (argv.dryrun) {
-    return Promise.resolve({response: '250 OK', messageId: 'dryrun'});
+    return {response: '250 OK', messageId: 'dryrun'};
   } else {
     return transporter.sendMail(message);
   }
@@ -115,6 +115,9 @@ AND e.calendar_id = y.id`;
  */
 async function processAnniversary(contents, num, hyear) {
   const info = getYahrzeitDetailForId(contents, num);
+  if (info === null) {
+    return {msg: `Skipping blank ${id}.${num}`};
+  }
   const id = info.id = contents.id;
   const anniversaryId = info.anniversaryId = `${id}.${num}.${hyear}`;
   const type = info.type;
@@ -123,18 +126,18 @@ async function processAnniversary(contents, num, hyear) {
     HebrewCalendar.getYahrzeit(hyear, origDt) :
     HebrewCalendar.getBirthdayOrAnniversary(hyear, origDt);
   if (!hd) {
-    return Promise.resolve({msg: `No anniversary for ${anniversaryId}`});
+    return {msg: `No anniversary for ${anniversaryId}`};
   }
   const observed = info.observed = dayjs(hd.greg());
   const diff = info.diff = observed.diff(today, 'd');
   if (diff < 0 || diff > 7) {
-    return Promise.resolve({msg: `Anniversary ${anniversaryId} occurs in ${diff} days`});
+    return {msg: `Anniversary ${anniversaryId} occurs in ${diff} days`};
   }
   const sqlSent = 'SELECT sent_date FROM yahrzeit_sent WHERE yahrzeit_id = ? AND num = ? AND hyear = ?';
   logger.debug(sqlSent);
   const sent = await db.query(sqlSent, [id, num, hyear]);
   if (sent && sent.length >= 1) {
-    return Promise.resolve({msg: `Message for ${anniversaryId} sent on ${sent[0].sent_date}`});
+    return {msg: `Message for ${anniversaryId} sent on ${sent[0].sent_date}`};
   }
 
   info.num = num;
