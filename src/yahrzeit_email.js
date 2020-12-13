@@ -116,7 +116,7 @@ AND e.calendar_id = y.id`;
 async function processAnniversary(contents, num, hyear) {
   const info = getYahrzeitDetailForId(contents, num);
   if (info === null) {
-    return {msg: `Skipping blank ${id}.${num}`};
+    return {msg: `Skipping blank ${contents.id}.${num}`};
   }
   const id = info.id = contents.id;
   const anniversaryId = info.anniversaryId = `${id}.${num}.${hyear}`;
