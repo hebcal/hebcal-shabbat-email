@@ -131,7 +131,7 @@ async function main() {
  * @param {Object} info
  */
 function writeLogLine(logStream, cfg, info) {
-  const location = cfg.zip || cfg.geonameid;
+  const location = cfg.zip || cfg.geonameid || cfg.legacyCity;
   const mid = info.messageId.substring(1, info.messageId.indexOf('@'));
   const status = Number(info.response.startsWith('250'));
   logStream.write(`${mid}:${status}:${cfg.email}:${location}\n`);

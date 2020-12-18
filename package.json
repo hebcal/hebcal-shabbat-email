@@ -23,15 +23,15 @@
   "devDependencies": {
     "@babel/cli": "^7.12.10",
     "@babel/core": "^7.12.10",
-    "@babel/preset-env": "^7.12.10",
+    "@babel/preset-env": "^7.12.11",
     "@babel/register": "^7.12.10",
     "eslint": "^7.15.0",
     "eslint-config-google": "^0.14.0"
   },
   "dependencies": {
-    "@hebcal/core": "^2.8.0",
+    "@hebcal/core": "^2.9.0",
     "@hebcal/geo-sqlite": "^2.4.0",
-    "aws-sdk": "^2.809.0",
+    "aws-sdk": "^2.812.0",
     "better-sqlite3": "^7.1.1",
     "dayjs": "^1.9.7",
     "fs-ext": "^2.0.0",
