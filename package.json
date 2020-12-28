@@ -1,6 +1,6 @@
 {
   "name": "hebcal-shabbat-email",
-  "version": "2.0.2",
+  "version": "3.0.0",
   "description": "Weekly shabbat times email subscription management for hebcal.com",
   "main": "index.js",
   "scripts": {
@@ -25,15 +25,15 @@
     "@babel/core": "^7.12.10",
     "@babel/preset-env": "^7.12.11",
     "@babel/register": "^7.12.10",
-    "eslint": "^7.15.0",
+    "eslint": "^7.16.0",
     "eslint-config-google": "^0.14.0"
   },
   "dependencies": {
-    "@hebcal/core": "^2.9.0",
-    "@hebcal/geo-sqlite": "^2.4.0",
-    "aws-sdk": "^2.812.0",
-    "better-sqlite3": "^7.1.1",
-    "dayjs": "^1.9.7",
+    "@hebcal/core": "^3.0.0",
+    "@hebcal/geo-sqlite": "^3.0.0",
+    "aws-sdk": "^2.817.0",
+    "better-sqlite3": "^7.1.2",
+    "dayjs": "^1.9.8",
     "fs-ext": "^2.0.0",
     "ini": "^1.3.8",
     "minimist": "^1.2.5",
