@@ -29,9 +29,9 @@
     "eslint-config-google": "^0.14.0"
   },
   "dependencies": {
-    "@hebcal/core": "^3.0.0",
+    "@hebcal/core": "^3.0.1",
     "@hebcal/geo-sqlite": "^3.0.0",
-    "aws-sdk": "^2.817.0",
+    "aws-sdk": "^2.819.0",
     "better-sqlite3": "^7.1.2",
     "dayjs": "^1.9.8",
     "fs-ext": "^2.0.0",
@@ -39,7 +39,7 @@
     "minimist": "^1.2.5",
     "mysql2": "^2.2.5",
     "nodemailer": "^6.4.17",
-    "pino": "^6.8.0",
+    "pino": "^6.9.0",
     "pino-pretty": "^4.3.0",
     "twitter": "^1.7.1"
   }
