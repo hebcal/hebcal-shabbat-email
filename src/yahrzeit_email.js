@@ -1,11 +1,12 @@
 import dayjs from 'dayjs';
 import fs from 'fs';
 import ini from 'ini';
-import {HDate, HebrewCalendar, Locale} from '@hebcal/core';
+import {Event, flags, HDate, HebrewCalendar, Locale} from '@hebcal/core';
 import pino from 'pino';
 import minimist from 'minimist';
 import {makeDb} from './makedb';
 import {getChagOnDate, makeTransporter} from './common';
+import {IcalEvent} from '@hebcal/icalendar';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose'],
@@ -36,7 +37,7 @@ const UTM_PARAM = 'utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=y
   today.format('YYYY-MM-DD');
 const YAHRZEIT_POSTSCRIPT = `${BLANK}
 <div>
-May your loved one’s soul be bound up in the bond of eternal life and may their memory
+May your loved one's soul be bound up in the bond of eternal life and may their memory
 serve as a continued source of inspiration and comfort to you.
 </div>
 `;
@@ -191,7 +192,9 @@ function makeMessage(info) {
   const verb = isYahrzeit ? 'remembering' : 'honoring';
   const postscript = isYahrzeit ? YAHRZEIT_POSTSCRIPT : '';
   const erev = observed.subtract(1, 'day');
-  const lightCandle = isYahrzeit ? ` It is customary to light a memorial candle just before sundown on
+  const dow = erev.day();
+  const when = dow === 5 ? 'before sundown' : dow === 6 ? 'after nightfall' : 'at sundown';
+  const lightCandle = isYahrzeit ? ` It is customary to light a memorial candle ${when} on
 <time datetime="${erev.format('YYYY-MM-DD')}" ${DATE_STYLE}>${erev.format('dddd, MMMM D')}</time>
 as the Yahrzeit begins.` : '';
   const hebdate = info.hd.render('en');
@@ -220,8 +223,8 @@ as the Yahrzeit begins.` : '';
 <time datetime="${observed.format('YYYY-MM-DD')}" ${DATE_STYLE}>${observed.format('dddd, MMMM D')}</time>,
 corresponding to the ${hebdate}.</div>
 ${BLANK}
-<div>${typeStr} begins at sundown on the previous day and continues until sundown on the day
-of observance.${lightCandle}</div>
+<div>${typeStr} begins at sundown on the previous day and continues until
+sundown on the day of observance.${lightCandle}</div>
 ${postscript}
 </div>
 ${BLANK}
@@ -235,6 +238,50 @@ ${BLANK}
 </body></html>
 `,
   };
+  if (isYahrzeit) {
+    const dt = erev.toDate();
+    const ev = new Event(
+        new HDate(dt),
+        `${info.name} ${typeStr} reminder`,
+        flags.USER_EVENT,
+        {
+          eventTime: dt,
+          eventTimeStr: '15:00',
+          memo: `Hebcal joins you in ${verb} ${info.name}, whose ${nth} ${typeStr} occurs on ` +
+          `${observed.format('dddd, MMMM D')}, corresponding to the ${hebdate}.\\n\\n` +
+          `${typeStr} begins at sundown on the previous day and continues until ` +
+          `sundown on the day of observance. ` +
+          `It is customary to light a memorial candle ${when} as the Yahrzeit begins.\n\n` +
+          'May your loved one\'s soul be bound up in the bond of eternal life and may their memory ' +
+          'serve as a continued source of inspiration and comfort to you.',
+        },
+    );
+    const ical = new IcalEvent(ev, {});
+    const lines0 = ical.getLongLines().slice(1);
+    const trigger = lines0.findIndex((line) => line.startsWith('TRIGGER'));
+    lines0[trigger] = 'TRIGGER:P0DT0H0M0S';
+    const lines = [
+      'BEGIN:VCALENDAR',
+      `PRODID:-//Hebcal//NONSGML Anniversary Email v1${IcalEvent.version()}//EN`,
+      'METHOD:REQUEST',
+      'VERSION:2.0',
+      'CALSCALE:GREGORIAN',
+      'BEGIN:VEVENT',
+      'ORGANIZER;CN=Hebcal:mailto:shabbat-owner@hebcal.com',
+      `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=FALSE;CN=${emailAddress}:mailto:${emailAddress}`,
+      'STATUS:CONFIRMED',
+    ].map(IcalEvent.fold)
+        .concat(lines0.map(IcalEvent.fold))
+        .concat([
+          'END:VCALENDAR',
+        ]).join('\r\n');
+    message.attachments = [{
+      content: lines,
+      contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+      contentDisposition: 'inline',
+      filename: 'invite.ics',
+    }];
+  }
   return message;
 }
 
