@@ -249,36 +249,27 @@ ${BLANK}
           eventTimeStr: '15:00',
           memo: `Hebcal joins you in ${verb} ${info.name}, whose ${nth} ${typeStr} occurs on ` +
           `${observed.format('dddd, MMMM D')}, corresponding to the ${hebdate}.\\n\\n` +
-          `${typeStr} begins at sundown on the previous day and continues until ` +
+          `${typeStr} begins at sundown on ${erev.format('dddd, MMMM D')} and continues until ` +
           `sundown on the day of observance. ` +
-          `It is customary to light a memorial candle ${when} as the Yahrzeit begins.\n\n` +
+          `It is customary to light a memorial candle ${when} as the Yahrzeit begins.\\n\\n` +
           'May your loved one\'s soul be bound up in the bond of eternal life and may their memory ' +
           'serve as a continued source of inspiration and comfort to you.',
         },
     );
     const ical = new IcalEvent(ev, {});
-    const lines0 = ical.getLongLines().slice(1);
+    const lines0 = ical.getLongLines();
     const trigger = lines0.findIndex((line) => line.startsWith('TRIGGER'));
     lines0[trigger] = 'TRIGGER:P0DT0H0M0S';
     const lines = [
       'BEGIN:VCALENDAR',
       `PRODID:-//Hebcal//NONSGML Anniversary Email v1${IcalEvent.version()}//EN`,
-      'METHOD:REQUEST',
+      'METHOD:PUBLISH',
       'VERSION:2.0',
       'CALSCALE:GREGORIAN',
-      'BEGIN:VEVENT',
-      'ORGANIZER;CN=Hebcal:mailto:shabbat-owner@hebcal.com',
-      `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=FALSE;CN=${emailAddress}:mailto:${emailAddress}`,
-      'STATUS:CONFIRMED',
-    ].map(IcalEvent.fold)
-        .concat(lines0.map(IcalEvent.fold))
-        .concat([
-          'END:VCALENDAR',
-        ]).join('\r\n');
+    ].join('\r\n') + '\r\n' + ical.toString() + '\r\nEND:VCALENDAR\r\n';
     message.attachments = [{
       content: lines,
-      contentType: 'text/calendar; charset=utf-8; method=REQUEST',
-      contentDisposition: 'inline',
+      contentType: 'text/calendar; charset=utf-8',
       filename: 'invite.ics',
     }];
   }
