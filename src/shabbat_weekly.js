@@ -420,8 +420,8 @@ begins at sundown on ${strtime}.`;
     const erevPesach = dayjs(new HDate(14, months.NISAN, yy).greg());
     const strtime = erevPesach.format(FORMAT_DOW_MONTH_DAY);
     note = `Chag Kasher v'Sameach! We wish you a happy
-<a style="color:#356635" href="${makeUrl('passover')}">Passover ${yy}</a>.
-Pesach begins at sundown on ${strtime}.`;
+<a style="color:#356635" href="${makeUrl('pesach')}">Pesach ${yy}</a>.
+Passover begins at sundown on ${strtime}.`;
   } else if (mm === months.KISLEV && dd >= 1 && dd <= 13) {
     // for the first 2 weeks of Kislev, show Chanukah greeting
     const erevChanukah = dayjs(new HDate(24, months.KISLEV, yy).greg());
