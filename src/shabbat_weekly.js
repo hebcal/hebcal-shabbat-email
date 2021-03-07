@@ -290,9 +290,7 @@ function genSubjectAndBody(events, options, cfg) {
   let htmlBody = '';
   let firstCandles;
   let sedra;
-  const holidaySeen = {};
   let roshChodeshSeen = false;
-  const urlSuffix = options.il ? '?i=on' : '';
   for (const ev of events) {
     const timed = Boolean(ev.eventTime);
     const desc = timed ? ev.renderBrief() : ev.render();
@@ -306,13 +304,12 @@ function genSubjectAndBody(events, options, cfg) {
         firstCandles = hourMin;
       }
       const verb = (desc === 'Candle lighting' || desc === 'Havdalah') ? ' is' : '';
-      body += `${desc}${verb} at ${hourMin} on ${strtime}\n`;
+      body += `${desc}${verb} at ${hourMin} on ${strtime}\n\n`;
       htmlBody += `<div>${desc}${verb} at <strong>${hourMin}</strong> on ${strtime}.</div>\n${BLANK}\n`;
     } else if (mask === flags.PARSHA_HASHAVUA) {
       sedra = desc.substring(desc.indexOf(' ') + 1);
-      body += `This week's Torah portion is ${desc}\n`;
+      body += `This week's Torah portion is ${desc}\n\n`;
       const url = ev.url();
-      body += `  ${url}${urlSuffix}\n`;
       const url2 = appendIsraelAndTracking(url, options.il);
       htmlBody += `<div>This week's Torah portion is <a href="${url2}">${desc}</a>.</div>\n${BLANK}\n`;
     } else {
@@ -328,12 +325,8 @@ function genSubjectAndBody(events, options, cfg) {
           roshChodeshSeen = true;
         }
       }
-      body += `${desc} occurs on ${occursOn}\n`;
+      body += `${desc} occurs on ${occursOn}\n\n`;
       const url = ev.url();
-      if (url && !holidaySeen[url]) {
-        body += `  ${url}${urlSuffix}\n`;
-        holidaySeen[url] = true;
-      }
       const url2 = appendIsraelAndTracking(url, options.il);
       htmlBody += `<div><a href="${url2}">${desc}</a> occurs on ${occursOn}.</div>\n${BLANK}\n`;
     }
@@ -354,11 +347,8 @@ function genSubjectAndBody(events, options, cfg) {
  * @return {string}
  */
 function appendIsraelAndTracking(url, il) {
-  if (il) {
-    return `${url}?i=on&amp;${UTM_PARAM}`;
-  } else {
-    return `${url}?${UTM_PARAM}`;
-  }
+  const ilStr = il ? 'i=on&amp;' : '';
+  return `${url}?${ilStr}${UTM_PARAM}`;
 }
 
 /**
