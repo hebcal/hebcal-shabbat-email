@@ -306,7 +306,7 @@ function genSubjectAndBody(events, options, cfg) {
         htmlBody += `${BLANK}\n`;
         body += '\n';
       }
-      htmlBody += `<div style="font-size:14px;color:#999;font-family:arial,helvetica,sans-serif">${strtime}</div>\n`;
+      htmlBody += `<div style="font-size:14px;color:#941003;font-family:arial,helvetica,sans-serif">${strtime}</div>\n`;
       body += `${strtime}\n`;
       prevStrtime = strtime;
     }
