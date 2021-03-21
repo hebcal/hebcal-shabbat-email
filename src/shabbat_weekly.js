@@ -199,6 +199,7 @@ ${unsubUrl}
 <body>${specialNote}
 <div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
 ${htmlBody0}
+${BLANK}
 <div style="font-size:16px">
 <div>These times are for ${cityDescr}.</div>
 ${BLANK}
@@ -278,6 +279,7 @@ function getSubjectAndBody(cfg) {
 }
 
 const BLANK = '<div>&nbsp;</div>';
+const ITEM_STYLE = 'padding-left:8px;margin-bottom:2px';
 
 /**
  * @param {Event[]} events
@@ -290,45 +292,47 @@ function genSubjectAndBody(events, options, cfg) {
   let htmlBody = '';
   let firstCandles;
   let sedra;
-  let roshChodeshSeen = false;
+  let prevStrtime;
   for (const ev of events) {
     const timed = Boolean(ev.eventTime);
-    const desc = timed ? ev.renderBrief() : ev.render();
+    const title = timed ? ev.renderBrief() : ev.render();
+    const desc = ev.getDesc();
     const hd = ev.getDate();
     const dt = dayjs(hd.greg());
     const mask = ev.getFlags();
     const strtime = dt.format(FORMAT_DOW_MONTH_DAY);
+    if (strtime !== prevStrtime) {
+      if (htmlBody !== '') {
+        htmlBody += `${BLANK}\n`;
+        body += '\n';
+      }
+      htmlBody += `<div style="font-size:14px;color:#999;font-family:arial,helvetica,sans-serif">${strtime}</div>\n`;
+      body += `${strtime}\n`;
+      prevStrtime = strtime;
+    }
     if (timed) {
       const hourMin = HebrewCalendar.reformatTimeStr(ev.eventTimeStr, 'pm', options);
       if (!firstCandles && desc === 'Candle lighting') {
         firstCandles = hourMin;
       }
       const verb = (desc === 'Candle lighting' || desc === 'Havdalah') ? ' is' : '';
-      body += `${desc}${verb} at ${hourMin} on ${strtime}\n\n`;
-      htmlBody += `<div>${desc}${verb} at <strong>${hourMin}</strong> on ${strtime}.</div>\n${BLANK}\n`;
+      body += `  ${title}${verb} at ${hourMin}\n`;
+      htmlBody += `<div style="${ITEM_STYLE}">${title}${verb} at <strong>${hourMin}</strong></div>\n`;
     } else if (mask === flags.PARSHA_HASHAVUA) {
-      sedra = desc.substring(desc.indexOf(' ') + 1);
-      body += `This week's Torah portion is ${desc}\n\n`;
+      sedra = title.substring(title.indexOf(' ') + 1);
+      body += `  Torah portion: ${title}\n`;
       const url = ev.url();
       const url2 = appendIsraelAndTracking(url, options.il);
-      htmlBody += `<div>This week's Torah portion is <a href="${url2}">${desc}</a>.</div>\n${BLANK}\n`;
+      htmlBody += `<div style="${ITEM_STYLE}">Torah portion: <a href="${url2}">${title}</a></div>\n`;
     } else {
-      let occursOn = strtime;
       const dow = dt.day();
       if (dow === 6 && !sedra && (mask & flags.CHAG || ev.cholHaMoedDay)) {
         sedra = ev.basename();
-      } else if (mask & flags.ROSH_CHODESH) {
-        if (roshChodeshSeen) {
-          continue;
-        } else if (hd.getDate() === 30) {
-          occursOn += ' and ' + dt.add(1, 'day').format(FORMAT_DOW_MONTH_DAY);
-          roshChodeshSeen = true;
-        }
       }
-      body += `${desc} occurs on ${occursOn}\n\n`;
+      body += `  ${title}\n`;
       const url = ev.url();
       const url2 = appendIsraelAndTracking(url, options.il);
-      htmlBody += `<div><a href="${url2}">${desc}</a> occurs on ${occursOn}.</div>\n${BLANK}\n`;
+      htmlBody += `<div style="${ITEM_STYLE}"><a href="${url2}">${title}</a></div>\n`;
     }
   }
   const shortLocation = cfg.location.getShortName();
