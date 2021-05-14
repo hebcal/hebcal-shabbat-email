@@ -266,9 +266,7 @@ function getSubjectAndBody(cfg) {
     il: location.getIsrael(),
     sedrot: true,
   };
-  if (cfg.M) {
-    options.havdalahTzeit = true;
-  } else {
+  if (typeof cfg.m === 'number') {
     options.havdalahMins = cfg.m;
   }
   const events = HebrewCalendar.calendar(options);
