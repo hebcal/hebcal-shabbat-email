@@ -9,6 +9,7 @@ import minimist from 'minimist';
 import {GeoDb} from '@hebcal/geo-sqlite';
 import {dirIfExistsOrCwd} from './makedb';
 import {shouldSendEmailToday, makeTransporter} from './common';
+import {appendIsraelAndTracking} from '@hebcal/rest-api';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose'],
@@ -34,8 +35,6 @@ if (!shouldSendEmailToday(TODAY0) && !argv.force) {
 }
 const [midnight, endOfWeek] = getStartAndEnd(TODAY);
 
-const UTM_PARAM = 'utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=shabbat-' +
-  dayjs(TODAY).format('YYYY-MM-DD');
 const FORMAT_DOW_MONTH_DAY = 'dddd, MMMM D';
 
 main()
@@ -195,6 +194,13 @@ To modify your subscription or to unsubscribe completely, visit:
 ${unsubUrl}
 `;
 
+  const urls = {
+    home: urlEncodeAndTrack('https://www.hebcal.com/'),
+    unsub: urlEncodeAndTrack(`${unsubUrl}&unsubscribe=1`),
+    modify: urlEncodeAndTrack(`${unsubUrl}&modify=1`),
+    privacy: urlEncodeAndTrack('https://www.hebcal.com/home/about/privacy-policy'),
+  };
+
   const htmlBody = `<!DOCTYPE html><html><head><title>Hebcal Shabbat Times</title></head>
 <body>${specialNote}
 <div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
@@ -208,11 +214,11 @@ ${BLANK}
 </div>
 </div>
 <div style="font-size:11px;color:#999;font-family:arial,helvetica,sans-serif">
-<div>This email was sent to ${cfg.email} by <a href="https://www.hebcal.com/?${UTM_PARAM}">Hebcal.com</a></div>
+<div>This email was sent to ${cfg.email} by <a href="${urls.home}">Hebcal.com</a></div>
 ${BLANK}
-<div><a href="${unsubUrl}&amp;unsubscribe=1&amp;${UTM_PARAM}">Unsubscribe</a> |
- <a href="${unsubUrl}&amp;modify=1&amp;${UTM_PARAM}">Update Settings</a> |
- <a href="https://www.hebcal.com/home/about/privacy-policy?${UTM_PARAM}">Privacy Policy</a></div>
+<div><a href="${urls.unsub}">Unsubscribe</a> |
+ <a href="${urls.modify}">Update Settings</a> |
+ <a href="${urls.privacy}">Privacy Policy</a></div>
 </div>
 </body></html>
 `;
@@ -320,7 +326,7 @@ function genSubjectAndBody(events, options, cfg) {
       sedra = title.substring(title.indexOf(' ') + 1);
       body += `  Torah portion: ${title}\n`;
       const url = ev.url();
-      const url2 = appendIsraelAndTracking(url, options.il);
+      const url2 = urlEncodeAndTrack(url, options.il);
       htmlBody += `<div style="${ITEM_STYLE}">Torah portion: <a href="${url2}">${title}</a></div>\n`;
     } else {
       const dow = dt.day();
@@ -329,7 +335,7 @@ function genSubjectAndBody(events, options, cfg) {
       }
       body += `  ${title}\n`;
       const url = ev.url();
-      const url2 = appendIsraelAndTracking(url, options.il);
+      const url2 = urlEncodeAndTrack(url, options.il);
       htmlBody += `<div style="${ITEM_STYLE}"><a href="${url2}">${title}</a></div>\n`;
     }
   }
@@ -343,14 +349,16 @@ function genSubjectAndBody(events, options, cfg) {
   return [subject, body, htmlBody, specialNote];
 }
 
+const UTM_CAMPAIGN = '&utm_campaign=shabbat-' + dayjs(TODAY).format('YYYY-MM-DD');
+
 /**
  * @param {string} url
  * @param {boolean} il
  * @return {string}
  */
-function appendIsraelAndTracking(url, il) {
-  const ilStr = il ? 'i=on&amp;' : '';
-  return `${url}?${ilStr}${UTM_PARAM}`;
+function urlEncodeAndTrack(url, il) {
+  const str = appendIsraelAndTracking(url, il, 'newsletter', 'email') + UTM_CAMPAIGN;
+  return str.replace(/&/g, '&amp;');
 }
 
 /**
@@ -369,7 +377,7 @@ function getSpecialNote(cfg, shortLocation) {
   // eslint-disable-next-line require-jsdoc
   function makeUrl(holiday) {
     const il = cfg.location.getIsrael();
-    return appendIsraelAndTracking(`https://www.hebcal.com/holidays/${holiday}-${gy}`, il);
+    return urlEncodeAndTrack(`https://www.hebcal.com/holidays/${holiday}-${gy}`, il);
   }
 
   let note;
@@ -379,13 +387,13 @@ function getSpecialNote(cfg, shortLocation) {
     const fridgeLoc = cfg.zip ? `zip=${cfg.zip}` : `geonameid=${cfg.geonameid}`;
     const erevRH = dayjs(new HDate(1, months.TISHREI, nextYear).prev().greg());
     const strtime = erevRH.format(FORMAT_DOW_MONTH_DAY);
-    let url = `https://www.hebcal.com/shabbat/fridge.cgi?${fridgeLoc}&amp;b=${cfg.b}&amp;year=${nextYear}`;
+    let url = `https://www.hebcal.com/shabbat/fridge.cgi?${fridgeLoc}&b=${cfg.b}&year=${nextYear}`;
     if (cfg.m) {
-      url += `&amp;m=${cfg.m}`;
+      url += `&m=${cfg.m}`;
     } else if (cfg.M) {
-      url += `&amp;M=on`;
+      url += `&M=on`;
     }
-    url += `&amp;${UTM_PARAM}`;
+    url = urlEncodeAndTrack(url);
     note = `Shana Tova! We wish you a happy and healthy New Year.
 Rosh Hashana ${nextYear} begins at sundown on ${strtime}. Print your <a
 style="color:#356635" href="${url}">${shortLocation} virtual refrigerator magnet</a>

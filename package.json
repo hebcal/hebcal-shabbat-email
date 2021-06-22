@@ -32,6 +32,7 @@
     "@hebcal/core": "^3.18.0",
     "@hebcal/geo-sqlite": "^3.4.1",
     "@hebcal/icalendar": "^4.7.0",
+    "@hebcal/rest-api": "^3.6.0",
     "aws-sdk": "^2.932.0",
     "better-sqlite3": "^7.4.1",
     "dayjs": "^1.10.5",
