@@ -146,8 +146,8 @@ function getStartAndEnd(now) {
   const midnight = dayjs(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
   const dow = midnight.day();
   const saturday = midnight.add(6 - dow, 'day');
-  const fiveDaysAhead = midnight.add(5, 'day');
-  const endOfWeek = fiveDaysAhead.isAfter(saturday) ? fiveDaysAhead : saturday;
+  const sixDaysAhead = midnight.add(6, 'day');
+  const endOfWeek = sixDaysAhead.isAfter(saturday) ? sixDaysAhead : saturday;
   return [midnight, endOfWeek];
 }
 
