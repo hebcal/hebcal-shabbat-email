@@ -314,6 +314,7 @@ function genSubjectAndBody(events, options, cfg) {
       body += `${strtime}\n`;
       prevStrtime = strtime;
     }
+    const emoji = ev.getEmoji();
     if (timed) {
       const hourMin = HebrewCalendar.reformatTimeStr(ev.eventTimeStr, 'pm', options);
       if (!firstCandles && desc === 'Candle lighting') {
@@ -321,7 +322,8 @@ function genSubjectAndBody(events, options, cfg) {
       }
       const verb = (desc === 'Candle lighting' || desc === 'Havdalah') ? ' is' : '';
       body += `  ${title}${verb} at ${hourMin}\n`;
-      htmlBody += `<div style="${ITEM_STYLE}">${title}${verb} at <strong>${hourMin}</strong></div>\n`;
+      const emojiSuffix = (mask & flags.CHANUKAH_CANDLES) ? ` ${emoji}` : '';
+      htmlBody += `<div style="${ITEM_STYLE}">${title}${verb} at <strong>${hourMin}</strong>${emojiSuffix}</div>\n`;
     } else if (mask === flags.PARSHA_HASHAVUA) {
       sedra = title.substring(title.indexOf(' ') + 1);
       body += `  Torah portion: ${title}\n`;
@@ -336,7 +338,8 @@ function genSubjectAndBody(events, options, cfg) {
       body += `  ${title}\n`;
       const url = ev.url();
       const url2 = urlEncodeAndTrack(url, options.il);
-      htmlBody += `<div style="${ITEM_STYLE}"><a href="${url2}">${title}</a></div>\n`;
+      const emojiSuffix = emoji ? ` ${emoji}` : '';
+      htmlBody += `<div style="${ITEM_STYLE}"><a href="${url2}">${title}</a>${emojiSuffix}</div>\n`;
     }
   }
   const shortLocation = cfg.location.getShortName();
