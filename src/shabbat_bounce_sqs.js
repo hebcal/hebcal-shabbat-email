@@ -184,12 +184,12 @@ async function readUnsubQueue(sqs, db) {
       if (innerMsg.notificationType == 'Received') {
         let source = innerMsg.mail.source;
         const destination = innerMsg.mail.destination[0];
-        const matches0 = destination.match(/^shabbat-unsubscribe\+(\w+)@hebcal.com$/);
+        const matches0 = destination && destination.match(/^shabbat-unsubscribe\+(\w+)@hebcal.com$/);
         const emailId = matches0 && matches0.length && matches0[1];
         const commonHeaders = innerMsg.mail.commonHeaders;
         if (commonHeaders && commonHeaders.from && commonHeaders.from[0]) {
           const from = commonHeaders.from[0];
-          const matches = from.match(/^[^<]*<([^>]+)>/);
+          const matches = from && from.match(/^[^<]*<([^>]+)>/);
           if (matches && matches.length && matches[1]) {
             source = matches[1].toLowerCase();
           }
