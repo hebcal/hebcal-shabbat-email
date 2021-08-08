@@ -57,6 +57,9 @@ async function randSleep() {
  * @param {string} twitterStatus
  */
 async function logInAndPost(twitterStatus) {
+  if (argv.dryrun) {
+    return Promise.resolve(true);
+  }
   const client = new Twitter({
     consumer_key: config['hebcal.twitter.consumer_key'],
     consumer_secret: config['hebcal.twitter.consumer_secret'],
@@ -79,7 +82,9 @@ function getEventStatusText(ev) {
   const subj = ev.getDesc();
   if (subj.startsWith('Erev ')) {
     const holiday = subj.substring(5);
-    let statusText = `${holiday} begins tonight at sundown.`;
+    const emoji0 = ev.getEmoji();
+    const emoji = emoji0 ? ` ${emoji0}` : '';
+    let statusText = `${holiday}${emoji} begins tonight at sundown.`;
     switch (holiday) {
       case 'Tish\'a B\'Av':
         statusText += ' Tzom Kal. We wish you an easy fast.';
@@ -111,7 +116,8 @@ function getEventStatusText(ev) {
 function getShortUrl(ev) {
   const url = ev.url();
   return url.replace('https://www.hebcal.com', 'https://hebcal.com')
-      .replace('/holidays/', '/h/').replace('/sedrot/', '/s/');
+      .replace('/holidays/', '/h/').replace('/sedrot/', '/s/') +
+      '?utm_source=twitter&utm_medium=social';
 }
 
 /** @return {string} */
@@ -132,11 +138,12 @@ function getDailyStatusText() {
     let statusText;
     for (const ev of tomorrowEvents) {
       const subj = ev.getDesc();
+      const emoji = ev.getEmoji();
       logger.info(`Tomorrow is ${subj}`);
       if (subj.startsWith('Rosh Chodesh') && hd.getDate() != 30) {
-        statusText = `${subj} begins tonight at sundown. Chodesh Tov!`;
+        statusText = `${subj} ${emoji} begins tonight at sundown. Chodesh Tov!`;
       } else if (subj == 'Shmini Atzeret') {
-        statusText = `${subj} begins tonight at sundown. Chag Sameach!`;
+        statusText = `${subj} ${emoji} begins tonight at sundown. Chag Sameach!`;
       } else if (ev.getFlags() & flags.MINOR_FAST) {
         statusText = `${subj} begins tomorrow at dawn. Tzom Kal. We wish you an easy fast.`;
       }
