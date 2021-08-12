@@ -6,11 +6,11 @@ import pino from 'pino';
 import minimist from 'minimist';
 
 const argv = minimist(process.argv.slice(2), {
-  boolean: ['dryrun', 'quiet', 'daily', 'shabbat'],
-  alias: {n: 'dryrun', q: 'quiet'},
+  boolean: ['dryrun', 'quiet', 'daily', 'shabbat', 'verbose'],
+  alias: {n: 'dryrun', q: 'quiet', v: 'verbose'},
 });
 const logger = pino({
-  level: argv.quiet ? 'warn' : 'info',
+  level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
   prettyPrint: {translateTime: true, ignore: 'pid,hostname'},
 });
 const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
@@ -58,8 +58,10 @@ async function randSleep() {
  */
 async function logInAndPost(twitterStatus) {
   if (argv.dryrun) {
+    logger.debug(`Skipping Twitter, dryrun mode`);
     return Promise.resolve(true);
   }
+  logger.debug(`Twitter init`);
   const client = new Twitter({
     consumer_key: config['hebcal.twitter.consumer_key'],
     consumer_secret: config['hebcal.twitter.consumer_secret'],
@@ -67,8 +69,13 @@ async function logInAndPost(twitterStatus) {
     access_token_secret: config['hebcal.twitter.access_token_secret'],
   });
   return new Promise((resolve, reject) => {
+    logger.debug(`Posting to Twitter`);
     client.post('statuses/update', {status: twitterStatus}, function(error, tweet, response) {
-      if (error) return reject(error);
+      if (error) {
+        logger.error(error);
+        return reject(error);
+      }
+      logger.info(`Successfully posted to Twitter`);
       return resolve(tweet);
     });
   });
@@ -117,7 +124,7 @@ function getShortUrl(ev) {
   const url = ev.url();
   return url.replace('https://www.hebcal.com', 'https://hebcal.com')
       .replace('/holidays/', '/h/').replace('/sedrot/', '/s/') +
-      '?utm_source=twitter&utm_medium=social';
+      '?us=twitter&um=social';
 }
 
 /** @return {string} */
