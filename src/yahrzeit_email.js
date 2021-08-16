@@ -10,6 +10,7 @@ import {IcalEvent} from '@hebcal/icalendar';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose'],
+  string: ['email', 'ini'],
   alias: {h: 'help', n: 'dryrun', q: 'quiet', f: 'force', v: 'verbose'},
 });
 if (argv.help) {
@@ -80,10 +81,13 @@ async function main() {
   db = makeDb(config);
   transporter = makeTransporter(config);
 
-  const sql = `SELECT e.id, e.email_addr, y.contents
+  let sql = `SELECT e.id, e.email_addr, e.calendar_id, y.contents
 FROM yahrzeit_email e, yahrzeit y
 WHERE e.sub_status = 'active'
 AND e.calendar_id = y.id`;
+  if (argv.email) {
+    sql += ` AND e.email_addr = '${argv.email}'`;
+  }
 
   logger.debug(sql);
   const rows = await db.query(sql);
@@ -101,6 +105,7 @@ AND e.calendar_id = y.id`;
   for (const row of rows) {
     const contents = row.contents;
     contents.id = row.id;
+    contents.calendarId = row.calendar_id;
     contents.emailAddress = row.email_addr;
     const maxId = getMaxYahrzeitId(contents);
     logger.debug(`${contents.id} ${contents.emailAddress} ${maxId}`);
@@ -166,6 +171,7 @@ async function processAnniversary(contents, num, hyear, sent) {
   info.num = num;
   info.emailAddress = contents.emailAddress;
   info.hyear = hyear;
+  info.calendarId = contents.calendarId;
   const message = makeMessage(info);
   await sendMail(message);
 
@@ -202,7 +208,9 @@ as the Yahrzeit begins.` : '';
   const nth = calculateAnniversaryNth(origDt, info.hyear);
   const msgid = `${info.anniversaryId}.${new Date().getTime()}`;
   const returnPath = `yahrzeit-return+${info.id}.${info.num}@hebcal.com`;
-  const unsubUrl = `https://www.hebcal.com/yahrzeit/email?id=${info.id}&num=${info.num}&unsubscribe=1`;
+  const urlBase = 'https://www.hebcal.com/yahrzeit';
+  const editUrl = `${urlBase}/edit/${info.calendarId}?${UTM_PARAM}#row${info.num}`;
+  const unsubUrl = `${urlBase}/email?id=${info.id}&num=${info.num}&unsubscribe=1`;
   const emailAddress = info.emailAddress;
   const message = {
     to: emailAddress,
@@ -232,7 +240,8 @@ ${BLANK}
 <div>This email was sent to ${emailAddress} by <a href="https://www.hebcal.com/?${UTM_PARAM}">Hebcal.com</a>.
 Hebcal is a free Jewish calendar and holiday web site.</div>
 ${BLANK}
-<div><a href="${unsubUrl}&amp;cfg=html&amp;${UTM_PARAM}">Unsubscribe</a> |
+<div><a href="${editUrl}">Edit ${typeStr}</a> |
+<a href="${unsubUrl}&amp;cfg=html&amp;${UTM_PARAM}">Unsubscribe</a> |
 <a href="https://www.hebcal.com/home/about/privacy-policy?${UTM_PARAM}">Privacy Policy</a></div>
 </div>
 </body></html>
