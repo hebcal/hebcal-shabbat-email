@@ -16,12 +16,18 @@ const logger = pino({
 const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 
+if (!argv.shabbat && !argv.daily) {
+  logger.error('Specify one of --shabbat or --daily');
+  process.exit(1);
+}
+
 main();
 
 // eslint-disable-next-line require-jsdoc
 async function main() {
   try {
     if (argv.daily) {
+      logger.debug('getDailyStatusText');
       const twitterStatus = getDailyStatusText();
       if (twitterStatus) {
         logger.info(twitterStatus);
@@ -29,6 +35,7 @@ async function main() {
         await logInAndPost(twitterStatus);
       }
     } else if (argv.shabbat) {
+      logger.debug('getShabbatStatusText');
       const twitterStatus = getShabbatStatusText();
       logger.info(twitterStatus);
       await randSleep();
@@ -38,6 +45,7 @@ async function main() {
     logger.fatal(err);
     process.exit(1);
   }
+  logger.debug('Done');
 }
 
 /** n/a */
@@ -167,14 +175,17 @@ function getShabbatStatusText() {
   const hd = new HDate().onOrAfter(6);
   const sedra = new Sedra(hd.getFullYear(), false);
   const parsha = sedra.getString(hd);
+  const sedraIL = new Sedra(hd.getFullYear(), true);
+  const parshaIL = sedraIL.getString(hd);
   let twitterStatus = `This week\'s #Torah portion is ${parsha}`;
+  if (parshaIL !== parsha) {
+    twitterStatus += ` in Diaspora and ${parshaIL} in Israel`;
+  }
 
-  const events = HebrewCalendar.getHolidaysOnDate(hd);
-  if (events) {
-    const specialShabbat = events.find((e) => e.getFlags() & flags.SPECIAL_SHABBAT);
-    if (specialShabbat) {
-      twitterStatus += ` (${specialShabbat.render()})`;
-    }
+  const events = HebrewCalendar.getHolidaysOnDate(hd, false) || [];
+  const specialShabbat = events.find((e) => e.getFlags() & flags.SPECIAL_SHABBAT);
+  if (specialShabbat) {
+    twitterStatus += ` (${specialShabbat.render()})`;
   }
   let url = '';
   if (sedra.isParsha(hd)) {
