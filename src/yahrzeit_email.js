@@ -99,17 +99,25 @@ AND e.calendar_id = y.id`;
   logger.debug(`Got ${rows.length} active subscriptions from DB`);
 
   const hyear = new HDate(today.toDate()).getFullYear();
+  const optout = await loadOptOut();
   const sent = await loadRecentSent();
-  logger.trace(JSON.stringify(sent));
 
   for (const row of rows) {
     const contents = row.contents;
     contents.id = row.id;
+    if (optout[`${contents.id}.0`]) {
+      logger.debug(`Skipping global opt-out ${contents.id}`);
+      continue;
+    }
     contents.calendarId = row.calendar_id;
     contents.emailAddress = row.email_addr;
     const maxId = getMaxYahrzeitId(contents);
     logger.debug(`${contents.id} ${contents.emailAddress} ${maxId}`);
     for (let num = 1; num <= maxId; num++) {
+      if (optout[`${contents.id}.${num}`]) {
+        logger.debug(`Skipping opt-out ${contents.id}.${num}`);
+        continue;
+      }
       const status = await processAnniversary(contents, num, hyear, sent);
       logger.debug(status);
     }
@@ -121,10 +129,26 @@ AND e.calendar_id = y.id`;
 /**
  * @return {any}
  */
+async function loadOptOut() {
+  const sql = 'SELECT email_id, num, updated FROM yahrzeit_optout WHERE deactivated = 1';
+  logger.debug(sql);
+  const rows = await db.query(sql);
+  logger.debug(`Got ${rows.length} opt_out from DB`);
+  const optout = {};
+  for (const row of rows) {
+    const key = `${row.email_id}.${row.num}`;
+    optout[key] = row.updated;
+  }
+  return optout;
+}
+
+/**
+ * @return {any}
+ */
 async function loadRecentSent() {
   const sql = `SELECT yahrzeit_id, num, hyear, sent_date
 FROM yahrzeit_sent
-WHERE datediff(NOW(), sent_date) < 10`;
+WHERE datediff(NOW(), sent_date) < 21`;
   logger.debug(sql);
   const rows = await db.query(sql);
   logger.debug(`Got ${rows.length} recent sent from DB`);
