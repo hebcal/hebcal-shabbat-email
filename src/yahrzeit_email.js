@@ -209,7 +209,7 @@ as the Yahrzeit begins.` : '';
   const msgid = `${info.anniversaryId}.${new Date().getTime()}`;
   const returnPath = `yahrzeit-return+${info.id}.${info.num}@hebcal.com`;
   const urlBase = 'https://www.hebcal.com/yahrzeit';
-  const editUrl = `${urlBase}/edit/${info.calendarId}?${UTM_PARAM}#row${info.num}`;
+  const editUrl = `${urlBase}/edit/${info.calendarId}?${UTM_PARAM}#form`;
   const unsubUrl = `${urlBase}/email?id=${info.id}&num=${info.num}&unsubscribe=1`;
   const emailAddress = info.emailAddress;
   const message = {
