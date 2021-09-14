@@ -405,7 +405,7 @@ and post it on your refrigerator.`;
   } else if (yy === 5782 && mm === months.TISHREI && dd <= 9) {
     note = `G’mar Chatima Tova! We wish you a good inscription in the Book of Life.
 <br><br>We’re pleased to announce the
-<a href="https://www.hebcal.com/home/3744/hebcal-for-apple-watch-beta">Hebcal on the Apple Watch</a>
+<a href="https://www.hebcal.com/home/3744/hebcal-for-apple-watch-beta">Hebcal for Apple Watch</a>
 public beta! If you have an Apple Watch, please sign up and share your feedback.
 <br><br>iPhone and Android apps will come eventually. Please stay tuned!`;
   } else if (mm === months.TISHREI && dd <= 9) {
