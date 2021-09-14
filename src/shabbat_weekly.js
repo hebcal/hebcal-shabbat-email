@@ -398,19 +398,26 @@ function getSpecialNote(cfg, shortLocation) {
     }
     url = urlEncodeAndTrack(url);
     note = `Shana Tova! We wish you a happy and healthy New Year.
-Rosh Hashana ${nextYear} begins at sundown on ${strtime}. Print your <a
-style="color:#356635" href="${url}">${shortLocation} virtual refrigerator magnet</a>
-for candle candle lighting times and Parashat haShavuah on a compact 5x7 page.`;
+<br>Rosh Hashana ${nextYear} begins at sundown on ${strtime}.
+<br>Print your <a
+style="color:#356635" href="${url}">${shortLocation} ${nextYear} candle-lighting times</a>
+and post it on your refrigerator.`;
+  } else if (yy === 5782 && mm === months.TISHREI && dd <= 9) {
+    note = `G’mar Chatima Tova! We wish you a good inscription in the Book of Life.
+<br><br>We’re pleased to announce the
+<a href="https://www.hebcal.com/home/3744/hebcal-for-apple-watch-beta">Hebcal on the Apple Watch</a>
+public beta! If you have an Apple Watch, please sign up and share your feedback.
+<br><br>iPhone and Android apps will come eventually. Please stay tuned!`;
   } else if (mm === months.TISHREI && dd <= 9) {
     // between RH & YK
     const erevYK = dayjs(new HDate(9, months.TISHREI, yy).greg());
     const strtime = erevYK.format(FORMAT_DOW_MONTH_DAY);
-    note = `G'mar Chatima Tova! We wish you a good inscription in the Book of Life.
-<a style="color:#356635" href="${makeUrl('yom-kippur')}">Yom Kippur ${yy}</a>
+    note = `G’mar Chatima Tova! We wish you a good inscription in the Book of Life.
+<br><a style="color:#356635" href="${makeUrl('yom-kippur')}">Yom Kippur ${yy}</a>
 begins at sundown on ${strtime}.`;
   } else if ((mm === months.TISHREI && dd >= 17 && dd <= 21) || (mm === months.NISAN && dd >= 17 && dd <= 20)) {
     const holiday = mm === months.TISHREI ? 'Sukkot' : 'Pesach';
-    note = `Moadim L'Simcha! We wish you a very happy ${holiday}.`;
+    note = `Moadim L’Simcha! We wish you a very happy ${holiday}.`;
   } else if (mm === purimMonth && dd >= 2 && dd <= 10) {
     // show Purim greeting 1.5 weeks before
     const erevPurim = dayjs(new HDate(13, purimMonth, yy).greg());
@@ -422,9 +429,9 @@ begins at sundown on ${strtime}.`;
     // show Pesach greeting shortly after Purim and ~2 weeks before
     const erevPesach = dayjs(new HDate(14, months.NISAN, yy).greg());
     const strtime = erevPesach.format(FORMAT_DOW_MONTH_DAY);
-    note = `Chag Kasher v'Sameach! We wish you a happy
+    note = `Chag Kasher v’Sameach! We wish you a happy
 <a style="color:#356635" href="${makeUrl('pesach')}">Pesach ${yy}</a>.
-Passover begins at sundown on ${strtime}.`;
+<br>Passover begins at sundown on ${strtime}.`;
   } else if (mm === months.KISLEV && dd >= 1 && dd <= 13) {
     // for the first 2 weeks of Kislev, show Chanukah greeting
     const erevChanukah = dayjs(new HDate(24, months.KISLEV, yy).greg());
