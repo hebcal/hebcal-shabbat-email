@@ -24,16 +24,17 @@ argv.sleeptime = typeof argv.sleeptime === 'undefined' ? 300 : +argv.sleeptime;
 
 const logger = pino({
   level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
-  prettyPrint: {translateTime: true, ignore: 'pid,hostname'},
 });
 
 const TODAY0 = dayjs(argv.date); // undefined => new Date()
 const TODAY = TODAY0.toDate();
 logger.debug(`Today is ${TODAY0.format('dddd')}`);
 if (!shouldSendEmailToday(TODAY0) && !argv.force) {
+  logger.debug('Exiting...');
   process.exit(0);
 }
 const [midnight, endOfWeek] = getStartAndEnd(TODAY);
+logger.debug(`start=${midnight.format('YYYY-MM-DD')}, endOfWeek=${endOfWeek.format('YYYY-MM-DD')}`);
 
 const FORMAT_DOW_MONTH_DAY = 'dddd, MMMM D';
 

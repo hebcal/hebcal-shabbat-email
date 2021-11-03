@@ -20,7 +20,6 @@ if (argv.help) {
 
 const logger = pino({
   level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
-  prettyPrint: {translateTime: true, ignore: 'pid,hostname'},
 });
 
 let transporter = null;

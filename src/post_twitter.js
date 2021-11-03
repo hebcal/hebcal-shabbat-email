@@ -11,7 +11,6 @@ const argv = minimist(process.argv.slice(2), {
 });
 const logger = pino({
   level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
-  prettyPrint: {translateTime: true, ignore: 'pid,hostname'},
 });
 const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
