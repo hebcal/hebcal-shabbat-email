@@ -24,8 +24,8 @@ AWS.config.update({region: 'us-east-1'});
 const sqs = new AWS.SQS({
   apiVersion: '2012-11-05',
   credentials: new AWS.Credentials(
-      config['hebcal.aws.access_key'],
-      config['hebcal.aws.secret_key']),
+      config['hebcal.aws.sqs.access_key'],
+      config['hebcal.aws.sqs.secret_key']),
 });
 
 const transporter = makeTransporter(config);
