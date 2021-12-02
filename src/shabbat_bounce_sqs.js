@@ -2,7 +2,7 @@
 import fs from 'fs';
 import ini from 'ini';
 import {makeDb, dirIfExistsOrCwd} from './makedb';
-import {makeTransporter} from './common';
+import {makeTransporter, translateSmtpStatus} from './common';
 import pino from 'pino';
 import minimist from 'minimist';
 import AWS from 'aws-sdk';
@@ -38,35 +38,6 @@ main()
       logger.fatal(err);
       process.exit(1);
     });
-
-/**
- * @param {string} smtpStatus
- * @return {string}
- */
-function translateSmtpStatus(smtpStatus) {
-  switch (smtpStatus) {
-    case '5.1.0':
-    case '5.1.1':
-      return 'user_unknown';
-    case '5.1.2':
-    case '5.4.4':
-      return 'domain_error';
-    case '5.2.1':
-      return 'user_disabled';
-    case '4.2.2':
-    case '5.2.2':
-    case '5.2.3':
-    case '5.5.2':
-      return 'over_quota';
-    case '5.3.0':
-    case '5.4.1':
-    case '5.5.4':
-    case '5.7.1':
-      return 'spam';
-    default:
-      return 'unknown';
-  }
-}
 
 /**
  * @param {Object} bounce
