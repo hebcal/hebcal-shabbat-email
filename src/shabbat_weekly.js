@@ -196,11 +196,13 @@ ${unsubUrl}
 `;
 
   const msgid = cfg.id + '.' + Date.now();
+  const openUrl = `https://www.hebcal.com/email/open?msgid=${msgid}` +
+    `&loc=` + encodeURIComponent(cityDescr) + UTM_CAMPAIGN;
   const urls = {
     home: urlEncodeAndTrack('https://www.hebcal.com/'),
     unsub: urlEncodeAndTrack(`${unsubUrl}&unsubscribe=1`),
     modify: urlEncodeAndTrack(`${unsubUrl}&modify=1`),
-    open: urlEncodeAndTrack(`https://www.hebcal.com/email/open?msgid=${msgid}`),
+    open: openUrl.replace(/&/g, '&amp;'),
     privacy: urlEncodeAndTrack('https://www.hebcal.com/home/about/privacy-policy'),
   };
   // eslint-disable-next-line max-len
