@@ -195,13 +195,16 @@ To modify your subscription or to unsubscribe completely, visit:
 ${unsubUrl}
 `;
 
+  const msgid = cfg.id + '.' + Date.now();
   const urls = {
     home: urlEncodeAndTrack('https://www.hebcal.com/'),
     unsub: urlEncodeAndTrack(`${unsubUrl}&unsubscribe=1`),
     modify: urlEncodeAndTrack(`${unsubUrl}&modify=1`),
+    open: urlEncodeAndTrack(`https://www.hebcal.com/email/open?msgid=${msgid}`),
     privacy: urlEncodeAndTrack('https://www.hebcal.com/home/about/privacy-policy'),
   };
-
+  // eslint-disable-next-line max-len
+  const imgOpen = `<img src="${urls.open}" alt="" width="1" height="1" border="0" style="height:1px!important;width:1px!important;border-width:0!important;margin-top:0!important;margin-bottom:0!important;margin-right:0!important;margin-left:0!important;padding-top:0!important;padding-bottom:0!important;padding-right:0!important;padding-left:0!important">`;
   const htmlBody = `<!DOCTYPE html><html><head><title>Hebcal Shabbat Times</title></head>
 <body>${specialNote}
 <div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
@@ -221,10 +224,10 @@ ${BLANK}
  <a href="${urls.modify}">Update Settings</a> |
  <a href="${urls.privacy}">Privacy Policy</a></div>
 </div>
+${imgOpen}
 </body></html>
 `;
 
-  const msgid = cfg.id + '.' + new Date().getTime();
   const unsubAddr = `shabbat-unsubscribe+${cfg.id}@hebcal.com`;
   const returnPath = 'shabbat-return+' + cfg.email.replace('@', '=') + '@hebcal.com';
   const unsub1click = `https://www.hebcal.com/email?em=${encodeURIComponent(cfg.email)}&unsubscribe=1&v=1&cfg=json`;
