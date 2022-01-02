@@ -246,7 +246,7 @@ as the Yahrzeit begins.` : '';
     headers: {
       'Return-Path': returnPath,
       'Errors-To': returnPath,
-      'List-ID': `<${info.id}.${info.num}.list-id.hebcal.com>`,
+      'List-ID': `<${info.id}.list-id.hebcal.com>`,
       'List-Unsubscribe': `<${unsubUrl}&commit=1&cfg=json>`,
       'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
     },
