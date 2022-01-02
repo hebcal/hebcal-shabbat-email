@@ -77,6 +77,7 @@ WHERE e.email_address = b.email_address
 AND e.email_status = 'active'
 AND b.std_reason IN('${reasonsSql}')
 AND b.deactivated = 0
+AND DATEDIFF(NOW(), b.timestamp) < 365
 GROUP by b.email_address,std_reason`;
   logger.info(sql);
   const results = await db.query(sql);
