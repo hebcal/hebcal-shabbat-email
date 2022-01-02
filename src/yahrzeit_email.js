@@ -235,6 +235,8 @@ as the Yahrzeit begins.` : '';
   const editUrl = `${urlBase}/edit/${info.calendarId}?${UTM_PARAM}#form`;
   const unsubUrl = `${urlBase}/email?id=${info.id}&num=${info.num}&unsubscribe=1`;
   const emailAddress = info.emailAddress;
+  // eslint-disable-next-line max-len
+  const imgOpen = `<img src="https://www.hebcal.com/email/open?msgid=${msgid}&amp;loc=${typeStr}&amp;${UTM_PARAM}" alt="" width="1" height="1" border="0" style="height:1px!important;width:1px!important;border-width:0!important;margin-top:0!important;margin-bottom:0!important;margin-right:0!important;margin-left:0!important;padding-top:0!important;padding-bottom:0!important;padding-right:0!important;padding-left:0!important">`;
   const message = {
     to: emailAddress,
     from: 'Hebcal <shabbat-owner@hebcal.com>',
@@ -267,6 +269,7 @@ ${BLANK}
 <a href="${unsubUrl}&amp;cfg=html&amp;${UTM_PARAM}">Unsubscribe</a> |
 <a href="https://www.hebcal.com/home/about/privacy-policy?${UTM_PARAM}">Privacy Policy</a></div>
 </div>
+${imgOpen}
 </body></html>
 `,
   };
