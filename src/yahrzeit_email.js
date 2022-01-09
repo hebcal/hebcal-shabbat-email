@@ -289,16 +289,15 @@ ${imgOpen}
           `It is customary to light a memorial candle ${when} as the Yahrzeit begins.\\n\\n` +
           'May your loved one\'s soul be bound up in the bond of eternal life and may their memory ' +
           'serve as a continued source of inspiration and comfort to you.',
+          alarm: 'P0DT0H0M0S',
+          uid: `hebcal-${info.hyear}-${info.id}-${info.num}-reminder`,
+          category: 'Personal',
         },
     );
     const ical = new IcalEvent(ev, {});
-    const lines0 = ical.getLongLines();
-    const trigger = lines0.findIndex((line) => line.startsWith('TRIGGER'));
-    lines0[trigger] = 'TRIGGER:P0DT0H0M0S';
     const lines = [
       'BEGIN:VCALENDAR',
       `PRODID:-//Hebcal//NONSGML Anniversary Email v1${IcalEvent.version()}//EN`,
-      'METHOD:PUBLISH',
       'VERSION:2.0',
       'CALSCALE:GREGORIAN',
     ].join('\r\n') + '\r\n' + ical.toString() + '\r\nEND:VCALENDAR\r\n';
