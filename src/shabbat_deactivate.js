@@ -19,6 +19,9 @@ argv.count = argv.count || COUNT_DEFAULT;
 
 const logger = pino({
   level: argv.quiet ? 'warn' : 'info',
+  transport: {
+    target: 'pino-pretty',
+  },
 });
 const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));

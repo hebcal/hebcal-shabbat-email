@@ -20,6 +20,9 @@ if (argv.help) {
 
 const logger = pino({
   level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
+  transport: {
+    target: 'pino-pretty',
+  },
 });
 
 let transporter = null;
