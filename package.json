@@ -21,20 +21,20 @@
   },
   "homepage": "https://github.com/hebcal/hebcal-shabbat-email#readme",
   "devDependencies": {
-    "@babel/cli": "^7.16.7",
-    "@babel/core": "^7.16.7",
-    "@babel/preset-env": "^7.16.7",
-    "@babel/register": "^7.16.7",
-    "eslint": "^8.6.0",
+    "@babel/cli": "^7.16.8",
+    "@babel/core": "^7.16.12",
+    "@babel/preset-env": "^7.16.11",
+    "@babel/register": "^7.16.9",
+    "eslint": "^8.7.0",
     "eslint-config-google": "^0.14.0"
   },
   "dependencies": {
-    "@hebcal/core": "^3.32.0",
-    "@hebcal/geo-sqlite": "^3.7.0",
-    "@hebcal/icalendar": "^4.14.5",
-    "@hebcal/rest-api": "^3.10.2",
-    "aws-sdk": "^2.1053.0",
-    "better-sqlite3": "^7.4.6",
+    "@hebcal/core": "^3.33.2",
+    "@hebcal/geo-sqlite": "^3.8.0",
+    "@hebcal/icalendar": "^4.15.0",
+    "@hebcal/rest-api": "^3.12.0",
+    "aws-sdk": "^2.1064.0",
+    "better-sqlite3": "^7.5.0",
     "csv-parse": "^5.0.4",
     "dayjs": "^1.10.7",
     "fs-ext": "^2.0.0",
@@ -42,7 +42,8 @@
     "minimist": "^1.2.5",
     "mysql2": "^2.3.3",
     "nodemailer": "^6.7.2",
-    "pino": "^7.6.2",
+    "pino": "^7.6.4",
+    "pino-pretty": "^7.5.1",
     "twitter": "^1.7.1"
   }
 }

@@ -24,6 +24,9 @@ argv.sleeptime = typeof argv.sleeptime === 'undefined' ? 300 : +argv.sleeptime;
 
 const logger = pino({
   level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
+  transport: {
+    target: 'pino-pretty',
+  },
 });
 
 const TODAY0 = dayjs(argv.date); // undefined => new Date()
@@ -277,6 +280,7 @@ function getSubjectAndBody(cfg) {
     candleLightingMins: cfg.b,
     il: location.getIsrael(),
     sedrot: true,
+    shabbatMevarchim: true,
   };
   if (typeof cfg.m === 'number') {
     options.havdalahMins = cfg.m;
@@ -343,9 +347,15 @@ function genSubjectAndBody(events, options, cfg) {
       }
       body += `  ${title}\n`;
       const url = ev.url();
-      const url2 = urlEncodeAndTrack(url, options.il);
+      htmlBody += `<div style="${ITEM_STYLE}">`;
+      if (url) {
+        const url2 = urlEncodeAndTrack(url, options.il);
+        htmlBody += `<a href="${url2}">${title}</a>`;
+      } else {
+        htmlBody += title;
+      }
       const emojiSuffix = emoji ? ` ${emoji}` : '';
-      htmlBody += `<div style="${ITEM_STYLE}"><a href="${url2}">${title}</a>${emojiSuffix}</div>\n`;
+      htmlBody += `${emojiSuffix}</div>\n`;
     }
   }
   const shortLocation = cfg.location.getShortName();
@@ -603,7 +613,10 @@ Options:
   --dryrun         Prints the actions that ${PROG} would take
                      but does not remove anything
   --quiet          Only emit warnings and errors
+  --verbose        Extra debugging information
   --sleeptime <n>  Sleep <n> milliseconds between email (default 300)
+  --force          Run even if it's not Thursday
+  --ini <file>     Use non-default hebcal-dot-com.ini
 `;
   console.log(usage);
 }
