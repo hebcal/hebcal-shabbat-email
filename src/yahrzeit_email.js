@@ -20,10 +20,12 @@ if (argv.help) {
 
 const logger = pino({
   level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
+/*
   transport: {
     target: 'pino-pretty',
     options: {translateTime: 'SYS:standard', ignore: 'pid,hostname'},
   },
+*/
 });
 
 let transporter = null;

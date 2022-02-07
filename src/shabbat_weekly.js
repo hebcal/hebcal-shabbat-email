@@ -24,10 +24,12 @@ argv.sleeptime = typeof argv.sleeptime === 'undefined' ? 300 : +argv.sleeptime;
 
 const logger = pino({
   level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
+/*
   transport: {
     target: 'pino-pretty',
     options: {translateTime: 'SYS:standard', ignore: 'pid,hostname'},
   },
+*/
 });
 
 const TODAY0 = dayjs(argv.date); // undefined => new Date()

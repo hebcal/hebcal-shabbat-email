@@ -2,7 +2,7 @@
 import fs from 'fs';
 import ini from 'ini';
 import {parse} from 'csv-parse';
-import {makeDb, dirIfExistsOrCwd} from './makedb';
+import {makeDb} from './makedb';
 import pino from 'pino';
 import minimist from 'minimist';
 import {translateSmtpStatus} from './common';
@@ -17,8 +17,6 @@ const logger = pino({
 });
 const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
-
-let logdir;
 
 main()
     .then(() => {
@@ -36,7 +34,6 @@ VALUES (?,?,?,?,0)`;
 async function main() {
   const filename = argv._[0];
   logger.info(`Reading ${filename}`);
-  logdir = await dirIfExistsOrCwd('/var/log/hebcal');
   const records = await processFile(filename);
   const db = makeDb(config);
   for (const r of records) {
