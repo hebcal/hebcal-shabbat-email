@@ -7,6 +7,10 @@ import minimist from 'minimist';
 import {makeDb} from './makedb';
 import {getChagOnDate, makeTransporter} from './common';
 import {IcalEvent} from '@hebcal/icalendar';
+import mmh3 from 'murmurhash3';
+import util from 'util';
+
+const murmur32Hex = util.promisify(mmh3.murmur32Hex);
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose'],
@@ -109,22 +113,47 @@ AND e.calendar_id = y.id`;
 
   for (const row of rows) {
     const contents = row.contents;
-    contents.id = row.id;
-    if (optout[`${contents.id}.0`]) {
-      logger.debug(`Skipping global opt-out ${contents.id}`);
+    const id = contents.id = row.id;
+    if (optout[`${id}.0`]) {
+      logger.debug(`Skipping global opt-out ${id}`);
       continue;
     }
     contents.calendarId = row.calendar_id;
     contents.emailAddress = row.email_addr;
     const maxId = getMaxYahrzeitId(contents);
-    logger.debug(`${contents.id} ${contents.emailAddress} ${maxId}`);
+    logger.trace(`${id} ${contents.emailAddress} ${maxId}`);
     for (let num = 1; num <= maxId; num++) {
-      if (optout[`${contents.id}.${num}`]) {
-        logger.debug(`Skipping opt-out ${contents.id}.${num}`);
+      const info = await getYahrzeitDetailForId(contents, num);
+      if (info === null) {
+        logger.debug(`Skipping blank ${id}.${num}`);
         continue;
       }
-      const status = await processAnniversary(contents, num, hyear, sent);
-      logger.debug(status);
+      let skip = false;
+      const idNum = `${id}.${num}`;
+      for (const key of [idNum, `${idNum}.${info.hash}`]) {
+        if (optout[key]) {
+          logger.debug(`Skipping opt-out ${key}`);
+          skip = true;
+          break;
+        }
+      }
+      const prefix = `${idNum}.${hyear}`;
+      for (const key of [prefix, `${prefix}.${info.hash}`]) {
+        if (typeof sent[key] !== 'undefined') {
+          logger.debug(`Message for ${key} sent on ${sent[key]}`);
+          skip = true;
+          break;
+        }
+      }
+      if (!skip) {
+        info.id = id;
+        info.anniversaryId = `${id}.${hyear}.${info.hash}.${num}`;
+        info.hyear = hyear;
+        info.calendarId = contents.calendarId;
+        info.emailAddress = contents.emailAddress;
+        const status = await processAnniversary(info);
+        logger.debug(status);
+      }
     }
   }
 
@@ -132,54 +161,52 @@ AND e.calendar_id = y.id`;
 }
 
 /**
- * @return {any}
+ * @return {Object<string,Date>}
  */
 async function loadOptOut() {
-  const sql = 'SELECT email_id, num, updated FROM yahrzeit_optout WHERE deactivated = 1';
+  const sql = 'SELECT email_id, name_hash, num, updated FROM yahrzeit_optout WHERE deactivated = 1';
   logger.debug(sql);
   const rows = await db.query(sql);
   logger.debug(`Got ${rows.length} opt_out from DB`);
   const optout = {};
   for (const row of rows) {
-    const key = `${row.email_id}.${row.num}`;
+    const key0 = `${row.email_id}.${row.num}`;
+    const key = row.name_hash == null ? key0 : key0 + '.' + row.name_hash;
     optout[key] = row.updated;
   }
   return optout;
 }
 
 /**
- * @return {any}
+ * @return {Object<string,Date>}
  */
 async function loadRecentSent() {
-  const sql = `SELECT yahrzeit_id, num, hyear, sent_date
+  const sql = `SELECT yahrzeit_id, name_hash, num, hyear, sent_date
 FROM yahrzeit_sent
-WHERE datediff(NOW(), sent_date) < 21`;
+WHERE datediff(NOW(), sent_date) < 365`;
   logger.debug(sql);
   const rows = await db.query(sql);
   logger.debug(`Got ${rows.length} recent sent from DB`);
   const sent = {};
-  if (rows && rows.length) {
-    for (const row of rows) {
-      const key = `${row.yahrzeit_id}.${row.num}.${row.hyear}`;
-      sent[key] = row.sent_date;
-    }
+  for (const row of rows) {
+    const key0 = `${row.yahrzeit_id}.${row.num}.${row.hyear}`;
+    const key = row.name_hash == null ? key0 : key0 + '.' + row.name_hash;
+    sent[key] = row.sent_date;
   }
   return sent;
 }
 
+const sqlSentUpdate = `INSERT INTO yahrzeit_sent (yahrzeit_id, name_hash, num, hyear, sent_date)
+ VALUES (?, ?, ?, ?, NOW())`;
+
 /**
- * @param {Object<string,string>} contents
- * @param {number} num
- * @param {number} hyear
- * @param {any} sent
+ * @param {Object<string,string>} info
  */
-async function processAnniversary(contents, num, hyear, sent) {
-  const info = getYahrzeitDetailForId(contents, num);
-  if (info === null) {
-    return {msg: `Skipping blank ${contents.id}.${num}`};
-  }
-  const id = info.id = contents.id;
-  const anniversaryId = info.anniversaryId = `${id}.${num}.${hyear}`;
+async function processAnniversary(info) {
+  const id = info.id;
+  const num = info.num;
+  const anniversaryId = info.anniversaryId;
+  const hyear = info.hyear;
   const type = info.type;
   const origDt = info.day.toDate();
   const hd = info.hd = (type == 'Yahrzeit') ?
@@ -191,23 +218,15 @@ async function processAnniversary(contents, num, hyear, sent) {
   const observed = info.observed = dayjs(hd.greg());
   const diff = info.diff = observed.diff(today, 'd');
   if (diff < 0 || diff > 7) {
-    return {msg: `Anniversary ${anniversaryId} occurs in ${diff} days`};
-  }
-  if (typeof sent[anniversaryId] !== 'undefined') {
-    return {msg: `Message for ${anniversaryId} sent on ${sent[anniversaryId]}`};
+    return {msg: `${type} ${anniversaryId} occurs in ${diff} days`};
   }
 
-  info.num = num;
-  info.emailAddress = contents.emailAddress;
-  info.hyear = hyear;
-  info.calendarId = contents.calendarId;
   const message = makeMessage(info);
   await sendMail(message);
 
   if (!argv.dryrun) {
-    const sqlUpdate = 'INSERT INTO yahrzeit_sent (yahrzeit_id, num, hyear, sent_date) VALUES (?, ?, ?, NOW())';
-    logger.debug(sqlUpdate);
-    await db.query(sqlUpdate, [id, num, hyear]);
+    logger.debug(sqlSentUpdate);
+    await db.query(sqlSentUpdate, [id, info.hash, num, hyear]);
   }
 
   numSent++;
@@ -236,10 +255,10 @@ as the Yahrzeit begins.` : '';
   const origDt = info.day.toDate();
   const nth = calculateAnniversaryNth(origDt, info.hyear);
   const msgid = `${info.anniversaryId}.${new Date().getTime()}`;
-  const returnPath = `yahrzeit-return+${info.id}.${info.num}@hebcal.com`;
+  const returnPath = `yahrzeit-return+${info.id}.${info.hash}.${info.num}@hebcal.com`;
   const urlBase = 'https://www.hebcal.com/yahrzeit';
   const editUrl = `${urlBase}/edit/${info.calendarId}?${UTM_PARAM}#form`;
-  const unsubUrl = `${urlBase}/email?id=${info.id}&num=${info.num}&unsubscribe=1`;
+  const unsubUrl = `${urlBase}/email?id=${info.id}&hash=${info.hash}&num=${info.num}&unsubscribe=1`;
   const emailAddress = info.emailAddress;
   // eslint-disable-next-line max-len
   const imgOpen = `<img src="https://www.hebcal.com/email/open?msgid=${msgid}&amp;loc=${typeStr}&amp;${UTM_PARAM}" alt="" width="1" height="1" border="0" style="height:1px!important;width:1px!important;border-width:0!important;margin-top:0!important;margin-bottom:0!important;margin-right:0!important;margin-left:0!important;padding-top:0!important;padding-bottom:0!important;padding-right:0!important;padding-left:0!important">`;
@@ -296,7 +315,7 @@ ${imgOpen}
           'May your loved one\'s soul be bound up in the bond of eternal life and may their memory ' +
           'serve as a continued source of inspiration and comfort to you.',
           alarm: 'P0DT0H0M0S',
-          uid: `hebcal-${info.hyear}-${info.id}-${info.num}-reminder`,
+          uid: `hebcal-${info.anniversaryId}-reminder`,
           category: 'Personal',
         },
     );
@@ -386,7 +405,7 @@ function getMaxYahrzeitId(query) {
  * @param {number} id
  * @return {*}
  */
-function getYahrzeitDetailForId(query, id) {
+async function getYahrzeitDetailForId(query, id) {
   const dd = query[`d${id}`];
   const mm = query[`m${id}`];
   const yy = query[`y${id}`];
@@ -400,7 +419,8 @@ function getYahrzeitDetailForId(query, id) {
   if (sunset === 'on') {
     day = day.add(1, 'day');
   }
-  return {dd, mm, yy, sunset, type, name, day};
+  const hash = await murmur32Hex([day.format('YYYY-MM-DD'), type].join('-'));
+  return {num: id, dd, mm, yy, sunset, type, name, day, hash};
 }
 
 // eslint-disable-next-line require-jsdoc
