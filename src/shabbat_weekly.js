@@ -371,7 +371,7 @@ function genSubjectAndBody(events, options, cfg) {
   return [subject, body, htmlBody, specialNote];
 }
 
-const UTM_CAMPAIGN = '&utm_campaign=shabbat-' + dayjs(TODAY).format('YYYY-MM-DD');
+const UTM_CAMPAIGN = '&utm_campaign=shabbat-weekly';
 
 /**
  * @param {string} url

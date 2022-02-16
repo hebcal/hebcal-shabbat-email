@@ -43,8 +43,7 @@ if ((chag || today.day() === 6) && !argv.force) {
 }
 
 const BLANK = '<div>&nbsp;</div>';
-const UTM_PARAM = 'utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=yahrzeit-' +
-  today.format('YYYY-MM-DD');
+const UTM_PARAM = 'utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=yahrzeit-reminder';
 const YAHRZEIT_POSTSCRIPT = `${BLANK}
 <div>
 May your loved one's soul be bound up in the bond of eternal life and may their memory
