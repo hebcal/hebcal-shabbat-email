@@ -213,8 +213,7 @@ ${unsubUrl}
   };
   // eslint-disable-next-line max-len
   const imgOpen = `<img src="${urls.open}" alt="" width="1" height="1" border="0" style="height:1px!important;width:1px!important;border-width:0!important;margin-top:0!important;margin-bottom:0!important;margin-right:0!important;margin-left:0!important;padding-top:0!important;padding-bottom:0!important;padding-right:0!important;padding-left:0!important">`;
-  const htmlBody = `<!DOCTYPE html><html><head><title>Hebcal Shabbat Times</title></head>
-<body>${specialNote}
+  const htmlBody = `${specialNote}
 <div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
 ${htmlBody0}
 ${BLANK}
@@ -233,7 +232,6 @@ ${BLANK}
  <a href="${urls.privacy}">Privacy Policy</a></div>
 </div>
 ${imgOpen}
-</body></html>
 `;
 
   const unsubAddr = `shabbat-unsubscribe+${cfg.id}@hebcal.com`;

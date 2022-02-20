@@ -9,6 +9,7 @@ import {getChagOnDate, makeTransporter} from './common';
 import {IcalEvent} from '@hebcal/icalendar';
 import mmh3 from 'murmurhash3';
 import util from 'util';
+import {htmlToText} from 'nodemailer-html-to-text';
 
 const murmur32Hex = util.promisify(mmh3.murmur32Hex);
 
@@ -88,6 +89,15 @@ async function main() {
 
   db = makeDb(config);
   transporter = makeTransporter(config);
+  transporter.use('compile', htmlToText({
+    wordwrap: 74,
+    ignoreImage: true,
+    hideLinkHrefIfSameAsText: true,
+    selectors: [
+      {selector: 'img', format: 'skip'},
+      {selector: 'a', options: {hideLinkHrefIfSameAsText: true}},
+    ],
+  }));
 
   let sql = `SELECT e.id, e.email_addr, e.calendar_id, y.contents
 FROM yahrzeit_email e, yahrzeit y
@@ -274,8 +284,7 @@ as the Yahrzeit begins.` : '';
       'List-Unsubscribe': `<${unsubUrl}&commit=1&cfg=json>`,
       'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
     },
-    html: `<!DOCTYPE html><html><head><title>${subject}</title></head>
-<div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
+    html: `<div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
 <div>Hebcal joins you in ${verb} ${info.name}, whose ${nth} ${typeStr} occurs on
 <time datetime="${observed.format('YYYY-MM-DD')}" ${DATE_STYLE}>${observed.format('dddd, MMMM D')}</time>,
 corresponding to the ${hebdate}.</div>
@@ -294,7 +303,6 @@ ${BLANK}
 <a href="https://www.hebcal.com/home/about/privacy-policy?${UTM_PARAM}">Privacy Policy</a></div>
 </div>
 ${imgOpen}
-</body></html>
 `,
   };
   if (isYahrzeit) {
@@ -314,7 +322,7 @@ ${imgOpen}
           'May your loved one\'s soul be bound up in the bond of eternal life and may their memory ' +
           'serve as a continued source of inspiration and comfort to you.',
           alarm: 'P0DT0H0M0S',
-          uid: `hebcal-${info.anniversaryId}-reminder`,
+          uid: `reminder-${info.anniversaryId}`,
           category: 'Personal',
         },
     );
