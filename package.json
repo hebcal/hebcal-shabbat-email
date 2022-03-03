@@ -21,22 +21,22 @@
   },
   "homepage": "https://github.com/hebcal/hebcal-shabbat-email#readme",
   "devDependencies": {
-    "@babel/cli": "^7.17.3",
+    "@babel/cli": "^7.17.6",
     "@babel/core": "^7.17.5",
     "@babel/preset-env": "^7.16.11",
     "@babel/register": "^7.17.0",
-    "eslint": "^8.9.0",
+    "eslint": "^8.10.0",
     "eslint-config-google": "^0.14.0"
   },
   "dependencies": {
     "@hebcal/core": "^3.33.3",
-    "@hebcal/geo-sqlite": "^3.8.0",
-    "@hebcal/icalendar": "^4.15.2",
+    "@hebcal/geo-sqlite": "^3.9.0",
+    "@hebcal/icalendar": "^4.15.3",
     "@hebcal/rest-api": "^3.12.0",
-    "aws-sdk": "^2.1077.0",
+    "aws-sdk": "^2.1085.0",
     "better-sqlite3": "^7.5.0",
     "csv-parse": "^5.0.4",
-    "dayjs": "^1.10.7",
+    "dayjs": "^1.10.8",
     "fs-ext": "^2.0.0",
     "ini": "^2.0.0",
     "minimist": "^1.2.5",
@@ -45,7 +45,7 @@
     "nodemailer": "^6.7.2",
     "nodemailer-html-to-text": "^3.2.0",
     "pino": "^7.8.0",
-    "pino-pretty": "^7.5.1",
+    "pino-pretty": "^7.5.3",
     "twitter": "^1.7.1"
   }
 }

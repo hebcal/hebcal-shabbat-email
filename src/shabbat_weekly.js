@@ -377,8 +377,27 @@ const UTM_CAMPAIGN = '&utm_campaign=shabbat-weekly';
  * @return {string}
  */
 function urlEncodeAndTrack(url, il) {
-  const str = appendIsraelAndTracking(url, il, 'newsletter', 'email') + UTM_CAMPAIGN;
-  return str.replace(/&/g, '&amp;');
+  const u = new URL(url);
+  const path = u.pathname;
+  const isHoliday = path.startsWith('/holidays/');
+  if (u.host === 'www.hebcal.com' && (isHoliday || path.startsWith('/sedrot/'))) {
+    u.host = 'hebcal.com';
+    if (isHoliday) {
+      u.pathname = '/h/' + path.substring(10);
+    } else {
+      u.pathname = '/s/' + path.substring(8);
+    }
+    if (il) {
+      u.searchParams.set('i', 'on');
+    }
+    u.searchParams.set('us', 'newsletter');
+    u.searchParams.set('um', 'email');
+    u.searchParams.set('uc', 'shabbat-weekly');
+    url = u.toString();
+  } else {
+    url = appendIsraelAndTracking(url, il, 'newsletter', 'email', 'shabbat-weekly');
+  }
+  return url.replace(/&/g, '&amp;');
 }
 
 /**
