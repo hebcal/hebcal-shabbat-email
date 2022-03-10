@@ -88,8 +88,10 @@ async function main() {
   const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 
   db = makeDb(config);
-  transporter = makeTransporter(config);
-  transporter.use('compile', htmlToText(htmlToTextOptions));
+  if (!argv.dryrun) {
+    transporter = makeTransporter(config);
+    transporter.use('compile', htmlToText(htmlToTextOptions));
+  }
 
   let sql = `SELECT e.id, e.email_addr, e.calendar_id, y.contents
 FROM yahrzeit_email e, yahrzeit y

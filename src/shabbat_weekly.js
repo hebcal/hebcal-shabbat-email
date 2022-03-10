@@ -106,8 +106,9 @@ async function main() {
     }
   });
 
-  const transporter = makeTransporter(config);
-  const logStream = fs.createWriteStream(sentLogFilename, {flags: 'a'});
+  const transporter = argv.dryrun ? null : makeTransporter(config);
+  const logFilename = argv.dryrun ? '/dev/null' : sentLogFilename;
+  const logStream = fs.createWriteStream(logFilename, {flags: 'a'});
   const count = cfgs.length;
   logger.info(`About to mail ${count} users`);
   let i = 0;
