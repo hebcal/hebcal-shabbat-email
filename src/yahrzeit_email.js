@@ -1,7 +1,7 @@
 import dayjs from 'dayjs';
 import fs from 'fs';
 import ini from 'ini';
-import {Event, flags, HDate, HebrewCalendar, Locale} from '@hebcal/core';
+import {Event, flags, HDate, HebrewCalendar, Locale, months} from '@hebcal/core';
 import pino from 'pino';
 import minimist from 'minimist';
 import {makeDb} from './makedb';
@@ -73,7 +73,7 @@ main()
  */
 async function sendMail(message) {
   if (argv.dryrun) {
-    return {response: '250 OK', messageId: 'dryrun'};
+    return {response: '250 OK', messageId: message.messageId, dryrun: true};
   } else {
     return transporter.sendMail(message);
   }
@@ -116,10 +116,15 @@ AND e.calendar_id = y.id`;
   }
   logger.debug(`Got ${rows.length} active subscriptions from DB`);
 
-  const hyear = new HDate(today.toDate()).getFullYear();
+  const htoday = new HDate(today.toDate());
+  const hyears = [htoday.getFullYear()];
+  if (htoday.getMonth() === months.ELUL) {
+    hyears.push(hyears[0] + 1);
+  }
   const optout = await loadOptOut();
   const sent = await loadRecentSent();
 
+  const toSend = [];
   for (const row of rows) {
     const contents = row.contents;
     const id = contents.id = row.id;
@@ -146,24 +151,42 @@ AND e.calendar_id = y.id`;
           break;
         }
       }
-      const prefix = `${idNum}.${hyear}`;
-      for (const key of [prefix, `${prefix}.${info.hash}`]) {
-        if (typeof sent[key] !== 'undefined') {
-          logger.debug(`Message for ${key} sent on ${sent[key]}`);
-          skip = true;
-          break;
+      if (skip) {
+        continue;
+      }
+      for (const hyear of hyears) {
+        const prefix = `${idNum}.${hyear}`;
+        for (const key of [prefix, `${prefix}.${info.hash}`]) {
+          if (typeof sent[key] !== 'undefined') {
+            logger.debug(`Message for ${key} sent on ${sent[key]}`);
+            skip = true;
+            break;
+          }
+        }
+        if (!skip) {
+          info.id = id;
+          info.anniversaryId = `${id}.${hyear}.${info.hash}.${num}`;
+          info.hyear = hyear;
+          info.calendarId = contents.calendarId;
+          info.emailAddress = contents.emailAddress;
+          computeAnniversary(info);
+          const diff = info.diff;
+          if (!info.observed) {
+            logger.debug(`No anniversary for ${info.anniversaryId}`);
+          } else if (diff < 0 || diff > 7) {
+            logger.debug(`${info.type} ${info.anniversaryId} occurs in ${diff} days`);
+          } else {
+            toSend.push(info);
+          }
         }
       }
-      if (!skip) {
-        info.id = id;
-        info.anniversaryId = `${id}.${hyear}.${info.hash}.${num}`;
-        info.hyear = hyear;
-        info.calendarId = contents.calendarId;
-        info.emailAddress = contents.emailAddress;
-        const status = await processAnniversary(info);
-        logger.debug(status);
-      }
     }
+  }
+
+  logger.debug(`Processing ${toSend.length} messages`);
+  for (const info of toSend) {
+    const status = await processAnniversary(info);
+    logger.debug(status);
   }
 
   db.close();
@@ -205,6 +228,22 @@ WHERE datediff(NOW(), sent_date) < 365`;
   return sent;
 }
 
+/**
+ * @param {Object<string,string>} info
+ */
+function computeAnniversary(info) {
+  const hyear = info.hyear;
+  const origDt = info.day.toDate();
+  const hd = (info.type === 'Yahrzeit') ?
+    HebrewCalendar.getYahrzeit(hyear, origDt) :
+    HebrewCalendar.getBirthdayOrAnniversary(hyear, origDt);
+  if (hd) {
+    const observed = info.observed = dayjs(hd.greg());
+    info.diff = observed.diff(today, 'd');
+    info.hd = hd;
+  }
+}
+
 const sqlSentUpdate = `INSERT INTO yahrzeit_sent (yahrzeit_id, name_hash, num, hyear, sent_date)
  VALUES (?, ?, ?, ?, NOW())`;
 
@@ -212,33 +251,16 @@ const sqlSentUpdate = `INSERT INTO yahrzeit_sent (yahrzeit_id, name_hash, num, h
  * @param {Object<string,string>} info
  */
 async function processAnniversary(info) {
-  const id = info.id;
-  const num = info.num;
-  const anniversaryId = info.anniversaryId;
-  const hyear = info.hyear;
-  const type = info.type;
-  const origDt = info.day.toDate();
-  const hd = info.hd = (type == 'Yahrzeit') ?
-    HebrewCalendar.getYahrzeit(hyear, origDt) :
-    HebrewCalendar.getBirthdayOrAnniversary(hyear, origDt);
-  if (!hd) {
-    return {msg: `No anniversary for ${anniversaryId}`};
-  }
-  const observed = info.observed = dayjs(hd.greg());
-  const diff = info.diff = observed.diff(today, 'd');
-  if (diff < 0 || diff > 7) {
-    return {msg: `${type} ${anniversaryId} occurs in ${diff} days`};
-  }
-
   const message = makeMessage(info);
-  await sendMail(message);
+  const status = await sendMail(message);
 
   if (!argv.dryrun) {
     logger.debug(sqlSentUpdate);
-    await db.query(sqlSentUpdate, [id, info.hash, num, hyear]);
+    await db.query(sqlSentUpdate, [info.id, info.hash, info.num, info.hyear]);
   }
 
   numSent++;
+  return status;
 }
 
 /**
