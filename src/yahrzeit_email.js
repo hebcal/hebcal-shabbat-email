@@ -5,7 +5,7 @@ import {Event, flags, HDate, HebrewCalendar, Locale, months} from '@hebcal/core'
 import pino from 'pino';
 import minimist from 'minimist';
 import {makeDb} from './makedb';
-import {getChagOnDate, makeTransporter} from './common';
+import {getChagOnDate, makeTransporter, htmlToTextOptions} from './common';
 import {IcalEvent} from '@hebcal/icalendar';
 import mmh3 from 'murmurhash3';
 import util from 'util';
@@ -89,15 +89,7 @@ async function main() {
 
   db = makeDb(config);
   transporter = makeTransporter(config);
-  transporter.use('compile', htmlToText({
-    wordwrap: 74,
-    ignoreImage: true,
-    hideLinkHrefIfSameAsText: true,
-    selectors: [
-      {selector: 'img', format: 'skip'},
-      {selector: 'a', options: {hideLinkHrefIfSameAsText: true}},
-    ],
-  }));
+  transporter.use('compile', htmlToText(htmlToTextOptions));
 
   let sql = `SELECT e.id, e.email_addr, e.calendar_id, y.contents
 FROM yahrzeit_email e, yahrzeit y

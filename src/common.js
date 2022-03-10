@@ -1,6 +1,16 @@
 import {flags, HDate, HebrewCalendar} from '@hebcal/core';
 import nodemailer from 'nodemailer';
 
+export const htmlToTextOptions = {
+  wordwrap: 74,
+  ignoreImage: true,
+  hideLinkHrefIfSameAsText: true,
+  selectors: [
+    {selector: 'img', format: 'skip'},
+    {selector: 'a', options: {hideLinkHrefIfSameAsText: true}},
+  ],
+};
+
 /**
  * create reusable transporter object using the default SMTP transport
  * @param {Object<string,string>} iniConfig

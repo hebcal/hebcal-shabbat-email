@@ -8,8 +8,9 @@ import mysql from 'mysql2';
 import minimist from 'minimist';
 import {GeoDb} from '@hebcal/geo-sqlite';
 import {dirIfExistsOrCwd} from './makedb';
-import {shouldSendEmailToday, makeTransporter} from './common';
+import {shouldSendEmailToday, makeTransporter, htmlToTextOptions} from './common';
 import {appendIsraelAndTracking} from '@hebcal/rest-api';
+import {htmlToText} from 'html-to-text';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose'],
@@ -185,13 +186,13 @@ function mailUser(transporter, cfg) {
  * @return {any}
  */
 function getMessage(cfg) {
-  const [subj, body0, htmlBody0, specialNote] = getSubjectAndBody(cfg);
+  const [subj, body0, htmlBody0, specialNote, specialNoteTxt] = getSubjectAndBody(cfg);
 
   const encoded = encodeURIComponent(Buffer.from(cfg.email).toString('base64'));
   const unsubUrl = `https://www.hebcal.com/email?e=${encoded}`;
 
   const cityDescr = cfg.location.getName();
-  const body = body0 + `
+  const body = specialNoteTxt + body0 + `
 These times are for ${cityDescr}.
 
 Shabbat Shalom,
@@ -365,8 +366,10 @@ function genSubjectAndBody(events, options, cfg) {
   subject += ' ' + shortLocation;
   if (firstCandles) subject += ` candles ${firstCandles}`;
 
-  const specialNote = getSpecialNote(cfg, shortLocation);
-  return [subject, body, htmlBody, specialNote];
+  const specialNote = getSpecialNote(cfg, true);
+  const specialNoteTxt = getSpecialNote(cfg, false);
+
+  return [subject, body, htmlBody, specialNote, specialNoteTxt];
 }
 
 const UTM_CAMPAIGN = '&utm_campaign=shabbat-weekly';
@@ -377,35 +380,16 @@ const UTM_CAMPAIGN = '&utm_campaign=shabbat-weekly';
  * @return {string}
  */
 function urlEncodeAndTrack(url, il) {
-  const u = new URL(url);
-  const path = u.pathname;
-  const isHoliday = path.startsWith('/holidays/');
-  if (u.host === 'www.hebcal.com' && (isHoliday || path.startsWith('/sedrot/'))) {
-    u.host = 'hebcal.com';
-    if (isHoliday) {
-      u.pathname = '/h/' + path.substring(10);
-    } else {
-      u.pathname = '/s/' + path.substring(8);
-    }
-    if (il) {
-      u.searchParams.set('i', 'on');
-    }
-    u.searchParams.set('us', 'newsletter');
-    u.searchParams.set('um', 'email');
-    u.searchParams.set('uc', 'shabbat-weekly');
-    url = u.toString();
-  } else {
-    url = appendIsraelAndTracking(url, il, 'newsletter', 'email', 'shabbat-weekly');
-  }
+  url = appendIsraelAndTracking(url, il, 'newsletter', 'email', 'shabbat-weekly');
   return url.replace(/&/g, '&amp;');
 }
 
 /**
  * @param {any} cfg
- * @param {string} shortLocation
+ * @param {boolean} isHTML
  * @return {string}
  */
-function getSpecialNote(cfg, shortLocation) {
+function getSpecialNote(cfg, isHTML) {
   const hd = new HDate(TODAY);
   const mm = hd.getMonth();
   const dd = hd.getDate();
@@ -416,9 +400,12 @@ function getSpecialNote(cfg, shortLocation) {
   // eslint-disable-next-line require-jsdoc
   function makeUrl(holiday) {
     const il = cfg.location.getIsrael();
-    return urlEncodeAndTrack(`https://www.hebcal.com/holidays/${holiday}-${gy}`, il);
+    return isHTML ?
+      urlEncodeAndTrack(`https://www.hebcal.com/holidays/${holiday}-${gy}`, il) :
+      `https://hebcal.com/h/${holiday}-${gy}${il ? '?i=on' : ''}`;
   }
 
+  const shortLocation = cfg.location.getShortName();
   let note;
   if ((mm === months.AV && dd >= 16 && dd <= 26) || (mm === months.ELUL && dd >= 16 && dd <= 26)) {
     // for a week or two in Av and the last week or two of Elul
@@ -481,6 +468,10 @@ ${when} on ${strtime}.`;
 
   if (!note) {
     return '';
+  }
+
+  if (!isHTML) {
+    return htmlToText(note, htmlToTextOptions) + '\n\n';
   }
 
   // eslint-disable-next-line max-len
