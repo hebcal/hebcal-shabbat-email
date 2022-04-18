@@ -4,6 +4,7 @@ import ini from 'ini';
 import {Event, flags, HDate, HebrewCalendar, Locale, months} from '@hebcal/core';
 import pino from 'pino';
 import minimist from 'minimist';
+import nodemailer from 'nodemailer';
 import {makeDb} from './makedb';
 import {getChagOnDate, makeTransporter, htmlToTextOptions} from './common';
 import {IcalEvent} from '@hebcal/icalendar';
@@ -14,7 +15,7 @@ import {htmlToText} from 'nodemailer-html-to-text';
 const murmur32Hex = util.promisify(mmh3.murmur32Hex);
 
 const argv = minimist(process.argv.slice(2), {
-  boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose'],
+  boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose', 'localhost'],
   string: ['email', 'ini'],
   alias: {h: 'help', n: 'dryrun', q: 'quiet', f: 'force', v: 'verbose'},
 });
@@ -89,7 +90,9 @@ async function main() {
 
   db = makeDb(config);
   if (!argv.dryrun) {
-    transporter = makeTransporter(config);
+    transporter = argv.localhost ?
+      nodemailer.createTransport({host: 'localhost', port: 25}) :
+      makeTransporter(config);
     transporter.use('compile', htmlToText(htmlToTextOptions));
   }
 

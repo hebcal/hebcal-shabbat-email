@@ -6,6 +6,7 @@ import pino from 'pino';
 import {flock} from 'fs-ext';
 import mysql from 'mysql2';
 import minimist from 'minimist';
+import nodemailer from 'nodemailer';
 import {GeoDb} from '@hebcal/geo-sqlite';
 import {dirIfExistsOrCwd} from './makedb';
 import {shouldSendEmailToday, makeTransporter, htmlToTextOptions} from './common';
@@ -13,7 +14,7 @@ import {appendIsraelAndTracking} from '@hebcal/rest-api';
 import {htmlToText} from 'html-to-text';
 
 const argv = minimist(process.argv.slice(2), {
-  boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose'],
+  boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose', 'localhost'],
   alias: {h: 'help', n: 'dryrun', q: 'quiet', f: 'force', v: 'verbose'},
 });
 if (argv.help) {
@@ -106,7 +107,9 @@ async function main() {
     }
   });
 
-  const transporter = argv.dryrun ? null : makeTransporter(config);
+  const transporter = argv.dryrun ? null :
+    argv.localhost ? nodemailer.createTransport({host: 'localhost', port: 25}) :
+    makeTransporter(config);
   const logFilename = argv.dryrun ? '/dev/null' : sentLogFilename;
   const logStream = fs.createWriteStream(logFilename, {flags: 'a'});
   const count = cfgs.length;
