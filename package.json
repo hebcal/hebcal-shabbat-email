@@ -25,15 +25,15 @@
     "@babel/core": "^7.17.9",
     "@babel/preset-env": "^7.16.11",
     "@babel/register": "^7.17.7",
-    "eslint": "^8.13.0",
+    "eslint": "^8.14.0",
     "eslint-config-google": "^0.14.0"
   },
   "dependencies": {
-    "@hebcal/core": "^3.34.1",
+    "@hebcal/core": "^3.35.0",
     "@hebcal/geo-sqlite": "^4.3.0",
     "@hebcal/icalendar": "^4.15.4",
     "@hebcal/rest-api": "^3.13.0",
-    "aws-sdk": "^2.1116.0",
+    "aws-sdk": "^2.1120.0",
     "better-sqlite3": "^7.5.1",
     "csv-parse": "^5.0.4",
     "dayjs": "^1.11.1",
