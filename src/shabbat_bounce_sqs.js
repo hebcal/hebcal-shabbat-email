@@ -84,9 +84,9 @@ async function readBounceQueue(sqs, db) {
     if (!response.Messages || !response.Messages.length) {
       logger.info(`Bounces: done`);
       return new Promise((resolve, reject) => {
-        bounceLogStream.end();
         bounceLogStream.on('finish', () => resolve(true));
         bounceLogStream.on('error', reject);
+        bounceLogStream.end();
       });
     }
     logger.debug(`Processing ${response.Messages.length} bounce messages`);
@@ -142,9 +142,9 @@ async function readUnsubQueue(sqs, db) {
     if (!response.Messages || !response.Messages.length) {
       logger.info(`Unsubscribes: done`);
       return new Promise((resolve, reject) => {
-        subsLogStream.end();
         subsLogStream.on('finish', () => resolve(true));
         subsLogStream.on('error', reject);
+        subsLogStream.end();
       });
     }
     logger.debug(`Processing ${response.Messages.length} unsubscribe messages`);
@@ -165,7 +165,7 @@ async function readUnsubQueue(sqs, db) {
           }
         }
         logger.info(`Unsubscribe from=${source} emailId=${emailId}`);
-        await unsubscribe(db, destination, source, emailId, subsLogStream);
+        await unsubscribe(db, destination, source, emailId, innerMsg, subsLogStream);
       }
     }
     logger.info(`Unsubscribes: deleting ${response.Messages.length} messages`);
@@ -187,23 +187,37 @@ async function errorMail(emailAddress) {
   return transporter.sendMail(message);
 }
 
-async function unsubscribe(db, destination, emailAddress, emailId, subsLogStream) {
+async function unsubscribe(db, destination, emailAddress, emailId, innerMsg, logStream) {
   const t = Math.floor(new Date().getTime() / 1000);
   const sql = 'SELECT email_status,email_id,email_address FROM hebcal_shabbat_email ' +
     (emailId ? 'WHERE email_id = ?' : 'WHERE email_address = ?');
   logger.debug(sql);
   const rows = await db.query(sql, [emailId || emailAddress]);
+  const logMessage = {
+    time: t,
+    status: 0,
+    from: emailAddress,
+    to: destination,
+    code: '',
+    message: innerMsg,
+  };
   if (!rows || !rows.length) {
-    subsLogStream.write(`status=0 from=${emailAddress} to=${destination} code=unsub_notfound time=${t}\n`);
+    logMessage.code='unsub_notfound';
+    logStream.write(JSON.stringify(logMessage));
+    logStream.write('\n');
     return errorMail(emailAddress);
   }
   const row = rows[0];
   const origEmail = row.email_address;
+  logMessage.from = origEmail;
   if (row.email_status == 'unsubscribed') {
-    subsLogStream.write(`status=0 from=${origEmail} to=${destination} code=unsub_twice time=${t}\n`);
+    logMessage.code='unsub_twice';
+    logStream.write(JSON.stringify(logMessage));
     return errorMail(origEmail);
   }
-  subsLogStream.write(`status=1 from=${origEmail} to=${destination} code=unsub time=${t}\n`);
+  logMessage.status = 1;
+  logMessage.code='unsub';
+  logStream.write(JSON.stringify(logMessage));
   const sql2 = 'UPDATE hebcal_shabbat_email SET email_status=\'unsubscribed\' WHERE email_id = ?';
   logger.debug(sql2);
   await db.query(sql2, [row.email_id]);

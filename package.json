@@ -29,11 +29,11 @@
     "eslint-config-google": "^0.14.0"
   },
   "dependencies": {
-    "@hebcal/core": "^3.35.0",
+    "@hebcal/core": "^3.36.2",
     "@hebcal/geo-sqlite": "^4.3.0",
-    "@hebcal/icalendar": "^4.15.4",
-    "@hebcal/rest-api": "^3.13.0",
-    "aws-sdk": "^2.1120.0",
+    "@hebcal/icalendar": "^4.17.2",
+    "@hebcal/rest-api": "^3.13.2",
+    "aws-sdk": "^2.1123.0",
     "better-sqlite3": "^7.5.1",
     "csv-parse": "^5.0.4",
     "dayjs": "^1.11.1",
@@ -45,7 +45,7 @@
     "mysql2": "^2.3.3",
     "nodemailer": "^6.7.3",
     "nodemailer-html-to-text": "^3.2.0",
-    "pino": "^7.10.0",
+    "pino": "^7.11.0",
     "pino-pretty": "^7.6.1",
     "twitter": "^1.7.1"
   }
