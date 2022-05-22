@@ -48,7 +48,7 @@ const BLANK = '<div>&nbsp;</div>';
 const UTM_PARAM = 'utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=yahrzeit-reminder';
 const YAHRZEIT_POSTSCRIPT = `${BLANK}
 <div>
-May your loved one's soul be bound up in the bond of eternal life and may their memory
+May your loved one’s soul be bound up in the bond of eternal life and may their memory
 serve as a continued source of inspiration and comfort to you.
 </div>
 `;
@@ -338,7 +338,7 @@ ${imgOpen}
           `${typeStr} begins at sundown on ${erev.format('dddd, MMMM D')} and continues until ` +
           `sundown on the day of observance. ` +
           `It is customary to light a memorial candle ${when} as the Yahrzeit begins.\\n\\n` +
-          'May your loved one\'s soul be bound up in the bond of eternal life and may their memory ' +
+          'May your loved one’s soul be bound up in the bond of eternal life and may their memory ' +
           'serve as a continued source of inspiration and comfort to you.',
           alarm: 'P0DT0H0M0S',
           uid: `reminder-${info.anniversaryId}`,
