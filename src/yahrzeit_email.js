@@ -24,13 +24,16 @@ if (argv.help) {
   process.exit(1);
 }
 
-const logger = pino({
+const pinoOpts = {
   level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
-  transport: {
+};
+if (pinoOpts.level !== 'warn') {
+  pinoOpts.transport = {
     target: 'pino-pretty',
     options: {translateTime: 'SYS:standard', ignore: 'pid,hostname'},
-  },
-});
+  };
+}
+const logger = pino(pinoOpts);
 
 let transporter = null;
 let db = null;
@@ -49,7 +52,7 @@ May your loved one’s soul be bound up in the bond of eternal life and may thei
 serve as a continued source of inspiration and comfort to you.
 </div>
 `;
-const BIRTHDAY_POSTSCRIPT = `${BLANK}\n<div>Mazel Tov!</div>\n`;
+const BIRTHDAY_POSTSCRIPT = `${BLANK}\n<div>Mazel Tov!</div>\n<div lang="he" dir="rtl">מזל טוב!</div>\n`;
 const DATE_STYLE = `style="color: #941003; white-space: nowrap"`;
 
 let numSent = 0;
