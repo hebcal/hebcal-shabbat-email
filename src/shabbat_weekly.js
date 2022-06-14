@@ -230,7 +230,8 @@ ${BLANK}
 </div>
 </div>
 <div style="font-size:11px;color:#999;font-family:arial,helvetica,sans-serif">
-<div>This email was sent to ${cfg.email} by <a href="${urls.home}">Hebcal.com</a></div>
+<div>This email was sent to ${cfg.email} by <a href="${urls.home}">Hebcal.com</a>.
+Hebcal is a free Jewish calendar and holiday web site.</div>
 ${BLANK}
 <div><a href="${urls.unsub}">Unsubscribe</a> |
  <a href="${urls.modify}">Update Settings</a> |
