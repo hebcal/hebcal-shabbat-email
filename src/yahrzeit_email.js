@@ -26,12 +26,10 @@ if (argv.help) {
 
 const logger = pino({
   level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
-/*
   transport: {
     target: 'pino-pretty',
     options: {translateTime: 'SYS:standard', ignore: 'pid,hostname'},
   },
-*/
 });
 
 let transporter = null;
@@ -45,13 +43,13 @@ if ((chag || today.day() === 6) && !argv.force) {
 }
 
 const BLANK = '<div>&nbsp;</div>';
-const UTM_PARAM = 'utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=yahrzeit-reminder';
 const YAHRZEIT_POSTSCRIPT = `${BLANK}
 <div>
 May your loved one’s soul be bound up in the bond of eternal life and may their memory
 serve as a continued source of inspiration and comfort to you.
 </div>
 `;
+const BIRTHDAY_POSTSCRIPT = `${BLANK}\n<div>Mazel Tov!</div>\n`;
 const DATE_STYLE = `style="color: #941003; white-space: nowrap"`;
 
 let numSent = 0;
@@ -267,12 +265,13 @@ async function processAnniversary(info) {
 function makeMessage(info) {
   const type = info.type;
   const isYahrzeit = Boolean(type === 'Yahrzeit');
+  const UTM_PARAM = `utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=${type.toLowerCase()}-reminder`;
   const typeStr = isYahrzeit ? type : `Hebrew ${type}`;
   const observed = info.observed;
   const subject = makeSubject(typeStr, observed);
   logger.info(`${info.anniversaryId} - ${info.diff} days - ${subject}`);
   const verb = isYahrzeit ? 'remembering' : 'honoring';
-  const postscript = isYahrzeit ? YAHRZEIT_POSTSCRIPT : '';
+  const postscript = isYahrzeit ? YAHRZEIT_POSTSCRIPT : type === 'Birthday' ? BIRTHDAY_POSTSCRIPT : '';
   const erev = observed.subtract(1, 'day');
   const dow = erev.day();
   const when = dow === 5 ? 'before sundown' : dow === 6 ? 'after nightfall' : 'at sundown';
