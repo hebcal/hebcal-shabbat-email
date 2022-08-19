@@ -4,15 +4,21 @@ import fs from 'fs';
 
 /**
  * Wraps a MySQL connection in promises
+ * @param {any} logger
  * @param {Object<string,string>} iniConfig
  * @return {Object}
  */
-export function makeDb(iniConfig) {
+export function makeDb(logger, iniConfig) {
+  const host = iniConfig['hebcal.mysql.host'];
+  const user = iniConfig['hebcal.mysql.user'];
+  const password = iniConfig['hebcal.mysql.password'];
+  const database = iniConfig['hebcal.mysql.dbname'];
+  logger.info(`Connecting to mysql://${user}@${host}/${database}`);
   const connection = mysql.createConnection({
-    host: iniConfig['hebcal.mysql.host'],
-    user: iniConfig['hebcal.mysql.user'],
-    password: iniConfig['hebcal.mysql.password'],
-    database: iniConfig['hebcal.mysql.dbname'],
+    host,
+    user,
+    password,
+    database,
   });
   connection.connect(function(err) {
     if (err) {

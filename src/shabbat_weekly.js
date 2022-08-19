@@ -4,11 +4,10 @@ import ini from 'ini';
 import {flags, HDate, HebrewCalendar, months} from '@hebcal/core';
 import pino from 'pino';
 import {flock} from 'fs-ext';
-import mysql from 'mysql2';
 import minimist from 'minimist';
 import nodemailer from 'nodemailer';
 import {GeoDb} from '@hebcal/geo-sqlite';
-import {dirIfExistsOrCwd} from './makedb';
+import {makeDb, dirIfExistsOrCwd} from './makedb';
 import {shouldSendEmailToday, makeTransporter, htmlToTextOptions} from './common';
 import {appendIsraelAndTracking} from '@hebcal/rest-api';
 import {htmlToText} from 'html-to-text';
@@ -390,6 +389,14 @@ function urlEncodeAndTrack(url, il) {
 }
 
 /**
+ * @param {string} s
+ * @return {string}
+ */
+function nowrap(s) {
+  return `<span style="white-space: nowrap">${s}</span>`;
+}
+
+/**
  * @param {any} cfg
  * @param {boolean} isHTML
  * @return {string}
@@ -417,7 +424,7 @@ function getSpecialNote(cfg, isHTML) {
     const nextYear = yy + 1;
     const fridgeLoc = cfg.zip ? `zip=${cfg.zip}` : `geonameid=${cfg.geonameid}`;
     const erevRH = dayjs(new HDate(1, months.TISHREI, nextYear).prev().greg());
-    const strtime = erevRH.format(FORMAT_DOW_MONTH_DAY);
+    const strtime = nowrap(erevRH.format(FORMAT_DOW_MONTH_DAY));
     let url = `https://www.hebcal.com/shabbat/fridge.cgi?${fridgeLoc}&b=${cfg.b}&year=${nextYear}`;
     if (cfg.m) {
       url += `&m=${cfg.m}`;
@@ -425,21 +432,16 @@ function getSpecialNote(cfg, isHTML) {
       url += `&M=on`;
     }
     url = urlEncodeAndTrack(url);
+    const rhNameSpan = nowrap(`Rosh Hashana ${nextYear}`);
     note = `Shana Tova! We wish you a happy and healthy New Year.
-<br>Rosh Hashana ${nextYear} begins at sundown on ${strtime}.
-<br>Print your <a
-style="color:#356635" href="${url}">${shortLocation} ${nextYear} candle-lighting times</a>
-and post it on your refrigerator.`;
-  } else if (yy === 5782 && mm === months.TISHREI && dd <= 9) {
-    note = `G’mar Chatima Tova! We wish you a good inscription in the Book of Life.
-<br><br>We’re pleased to announce the
-<a href="https://www.hebcal.com/home/3744/hebcal-for-apple-watch-beta">Hebcal for Apple Watch</a>
-public beta! If you have an Apple Watch, please sign up and share your feedback.
-<br><br>iPhone and Android apps will come eventually. Please stay tuned!`;
+${rhNameSpan} begins at sundown on ${strtime}.
+<br><br>Print your <a
+style="color:#356635" href="${url}">${shortLocation} ${nextYear} year-at-a-glance</a>
+for Shabbat and holiday candle-lighting times on a single page.`;
   } else if (mm === months.TISHREI && dd <= 9) {
     // between RH & YK
     const erevYK = dayjs(new HDate(9, months.TISHREI, yy).greg());
-    const strtime = erevYK.format(FORMAT_DOW_MONTH_DAY);
+    const strtime = nowrap(erevYK.format(FORMAT_DOW_MONTH_DAY));
     note = `G’mar Chatima Tova! We wish you a good inscription in the Book of Life.
 <br><a style="color:#356635" href="${makeUrl('yom-kippur')}">Yom Kippur ${yy}</a>
 begins at sundown on ${strtime}.`;
@@ -449,14 +451,14 @@ begins at sundown on ${strtime}.`;
   } else if (mm === purimMonth && dd >= 2 && dd <= 10) {
     // show Purim greeting 1.5 weeks before
     const erevPurim = dayjs(new HDate(13, purimMonth, yy).greg());
-    const strtime = erevPurim.format(FORMAT_DOW_MONTH_DAY);
+    const strtime = nowrap(erevPurim.format(FORMAT_DOW_MONTH_DAY));
     note = `Chag Purim Sameach!
 <a style="color:#356635" href="${makeUrl('purim')}">Purim ${yy}</a>
 begins at sundown on ${strtime}.`;
   } else if ((mm === purimMonth && dd >= 17 && dd <= 25) || (mm === months.NISAN && dd >= 2 && dd <= 9)) {
     // show Pesach greeting shortly after Purim and ~2 weeks before
     const erevPesach = dayjs(new HDate(14, months.NISAN, yy).greg());
-    const strtime = erevPesach.format(FORMAT_DOW_MONTH_DAY);
+    const strtime = nowrap(erevPesach.format(FORMAT_DOW_MONTH_DAY));
     note = `Chag Kasher v’Sameach! We wish you a happy
 <a style="color:#356635" href="${makeUrl('pesach')}">Pesach ${yy}</a>.
 <br>Passover begins at sundown on ${strtime}.`;
@@ -464,7 +466,7 @@ begins at sundown on ${strtime}.`;
     // for the first 2 weeks of Kislev, show Chanukah greeting
     const erevChanukah = dayjs(new HDate(24, months.KISLEV, yy).greg());
     const dow = erevChanukah.day();
-    const strtime = erevChanukah.format(FORMAT_DOW_MONTH_DAY);
+    const strtime = nowrap(erevChanukah.format(FORMAT_DOW_MONTH_DAY));
     const when = dow === 5 ? 'before sundown' : dow === 6 ? 'at nightfall' : 'at sundown';
     note = `Chag Urim Sameach! Light the first
 <a style="color:#356635" href="${makeUrl('chanukah')}">Chanukah candle</a>
@@ -489,19 +491,7 @@ ${when} on ${strtime}.`;
  * @param {string[]} addrs
  */
 async function loadSubs(config, addrs) {
-  const connection = mysql.createConnection({
-    host: config['hebcal.mysql.host'],
-    user: config['hebcal.mysql.user'],
-    password: config['hebcal.mysql.password'],
-    database: config['hebcal.mysql.dbname'],
-  });
-  connection.connect(function(err) {
-    if (err) {
-      logger.fatal(err);
-      throw err;
-    }
-    logger.debug('connected as id ' + connection.threadId);
-  });
+  const db = makeDb(logger, config);
   const allSql = addrs && addrs.length ?
     'AND email_address IN (\'' + addrs.join('\',\'') + '\')' :
     '';
@@ -518,35 +508,42 @@ WHERE email_status = 'active'
 AND email_ip IS NOT NULL
 ${allSql}`;
   logger.info(sql);
-  return new Promise((resolve, reject) => {
-    connection.query(sql, function(error, results) {
-      if (error) return reject(error);
-      const subs = new Map();
-      for (const row of results) {
-        const email = row.email_address;
-        const cfg = {
-          id: row.email_id,
-          email: email,
-          m: row.email_candles_havdalah,
-          M: Boolean(row.email_havdalah_tzeit),
-          b: row.email_sundown_candles,
-        };
-        if (row.email_candles_zipcode) {
-          cfg.zip = row.email_candles_zipcode;
-        } else if (row.email_candles_geonameid) {
-          cfg.geonameid = row.email_candles_geonameid;
-        } else if (row.email_candles_city) {
-          cfg.legacyCity = row.email_candles_city.replace(/\+/g, ' ');
-        } else {
-          logger.warn(`no geographic key for to=${email}, id=${cfg.id}`);
-          continue;
-        }
-        subs.set(email, cfg);
-      }
-      connection.end();
-      return resolve(subs);
-    });
-  });
+  const results = await db.query(sql);
+  const subs = new Map();
+  for (const row of results) {
+    const cfg = makeCandlesCfg(row);
+    if (cfg) {
+      subs.set(cfg.email, cfg);
+    }
+  }
+  await db.close();
+  return subs;
+}
+
+/**
+ * @param {*} row
+ * @return {*}
+ */
+function makeCandlesCfg(row) {
+  const email = row.email_address;
+  const cfg = {
+    id: row.email_id,
+    email: email,
+    m: row.email_candles_havdalah,
+    M: Boolean(row.email_havdalah_tzeit),
+    b: row.email_sundown_candles,
+  };
+  if (row.email_candles_zipcode) {
+    cfg.zip = row.email_candles_zipcode;
+  } else if (row.email_candles_geonameid) {
+    cfg.geonameid = row.email_candles_geonameid;
+  } else if (row.email_candles_city) {
+    cfg.legacyCity = row.email_candles_city.replace(/\+/g, ' ');
+  } else {
+    logger.warn(`no geographic key for to=${email}, id=${cfg.id}`);
+    return null;
+  }
+  return cfg;
 }
 
 /**
