@@ -40,7 +40,7 @@ main(argv.sleeptime)
     });
 
 async function main() {
-  const db = makeDb(config);
+  const db = makeDb(logger, config);
   logdir = await dirIfExistsOrCwd('/var/log/hebcal');
   const addrs = await getCandidates(db);
   logger.info(`Deactivating ${addrs.length} subscriptions`);

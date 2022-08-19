@@ -89,7 +89,7 @@ async function main() {
   logger.debug(`Reading ${iniPath}...`);
   const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 
-  db = makeDb(config);
+  db = makeDb(logger, config);
   if (!argv.dryrun) {
     transporter = argv.localhost ?
       nodemailer.createTransport({host: 'localhost', port: 25}) :

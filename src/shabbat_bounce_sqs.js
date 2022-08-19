@@ -232,7 +232,7 @@ async function unsubscribe(db, destination, emailAddress, emailId, innerMsg, log
 }
 
 async function main() {
-  const db = makeDb(config);
+  const db = makeDb(logger, config);
   logdir = await dirIfExistsOrCwd('/var/log/hebcal');
   await readUnsubQueue(sqs, db);
   await readBounceQueue(sqs, db);

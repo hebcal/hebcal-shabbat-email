@@ -35,7 +35,7 @@ async function main() {
   const filename = argv._[0];
   logger.info(`Reading ${filename}`);
   const records = await processFile(filename);
-  const db = makeDb(config);
+  const db = makeDb(logger, config);
   for (const r of records) {
     const emailAddress = r[2];
     const fullReason = r[1];
