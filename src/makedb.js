@@ -22,8 +22,10 @@ export function makeDb(logger, iniConfig) {
   });
   connection.connect(function(err) {
     if (err) {
+      logger.fatal(err);
       throw err;
     }
+    logger.debug('connected as id ' + connection.threadId);
   });
   const connQuery = util.promisify(connection.query);
   const connEnd = util.promisify(connection.end);
