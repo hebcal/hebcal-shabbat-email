@@ -135,6 +135,9 @@ function getEventStatusText(ev) {
  */
 function getShortUrl(ev) {
   const url = ev.url();
+  if (!url) {
+    return '';
+  }
   return url.replace('https://www.hebcal.com', 'https://hebcal.com')
       .replace('/holidays/', '/h/').replace('/sedrot/', '/s/') +
       '?us=twitter&um=social';
