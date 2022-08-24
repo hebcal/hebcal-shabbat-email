@@ -83,6 +83,7 @@ async function logInAndPost(twitterStatus) {
   });
   return new Promise((resolve, reject) => {
     logger.debug(`Posting to Twitter`);
+    twitterStatus = twitterStatus.trim();
     client.post('statuses/update', {status: twitterStatus}, function(error, tweet, response) {
       if (error) {
         logger.error(error);
