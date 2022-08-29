@@ -8,7 +8,7 @@ import minimist from 'minimist';
 import nodemailer from 'nodemailer';
 import {GeoDb} from '@hebcal/geo-sqlite';
 import {makeDb, dirIfExistsOrCwd} from './makedb';
-import {shouldSendEmailToday, makeTransporter, htmlToTextOptions} from './common';
+import {shouldSendEmailToday, makeTransporter, htmlToTextOptions, msleep} from './common';
 import {appendIsraelAndTracking} from '@hebcal/rest-api';
 import {htmlToText} from 'html-to-text';
 
@@ -159,14 +159,6 @@ function getStartAndEnd(now) {
   const sixDaysAhead = midnight.add(6, 'day');
   const endOfWeek = sixDaysAhead.isAfter(saturday) ? sixDaysAhead : saturday;
   return [midnight, endOfWeek];
-}
-
-/**
- * sleep for n miliseconds
- * @param {number} n
- */
-function msleep(n) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, n);
 }
 
 /**

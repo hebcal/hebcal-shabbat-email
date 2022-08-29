@@ -6,7 +6,7 @@ import pino from 'pino';
 import minimist from 'minimist';
 import nodemailer from 'nodemailer';
 import {makeDb} from './makedb';
-import {getChagOnDate, makeTransporter, htmlToTextOptions} from './common';
+import {getChagOnDate, makeTransporter, htmlToTextOptions, msleep} from './common';
 import {IcalEvent} from '@hebcal/icalendar';
 import mmh3 from 'murmurhash3';
 import util from 'util';
@@ -23,6 +23,9 @@ if (argv.help) {
   usage();
   process.exit(1);
 }
+
+// allow sleeptime=0 for no sleep
+argv.sleeptime = typeof argv.sleeptime === 'undefined' ? 300 : +argv.sleeptime;
 
 const pinoOpts = {
   level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
@@ -267,6 +270,9 @@ async function processAnniversary(info) {
     if (!argv.dryrun) {
       logger.debug(sqlSentUpdate);
       await db.query(sqlSentUpdate, [info.id, info.hash, info.num, info.hyear]);
+      if (argv.sleeptime) {
+        msleep(argv.sleeptime);
+      }
     }
     numSent++;
   } catch (err) {

@@ -100,3 +100,11 @@ export function translateSmtpStatus(smtpStatus) {
       return 'unknown';
   }
 }
+
+/**
+ * sleep for n miliseconds
+ * @param {number} n
+ */
+export function msleep(n) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, n);
+}
