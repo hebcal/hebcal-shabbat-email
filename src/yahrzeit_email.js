@@ -77,7 +77,14 @@ async function sendMail(message) {
   if (argv.dryrun) {
     return {response: '250 OK', messageId: message.messageId, dryrun: true};
   } else {
-    return transporter.sendMail(message);
+    return new Promise((resolve, reject) => {
+      transporter.sendMail(message, function(err, info) {
+        if (err) {
+          return reject(err);
+        }
+        return resolve(info);
+      });
+    });
   }
 }
 
@@ -135,14 +142,14 @@ AND e.calendar_id = y.id`;
     const maxId = getMaxYahrzeitId(contents);
     logger.trace(`${id} ${contents.emailAddress} ${maxId}`);
     for (let num = 1; num <= maxId; num++) {
-      const info = await getYahrzeitDetailForId(contents, num);
-      if (info === null) {
+      const info0 = await getYahrzeitDetailForId(contents, num);
+      if (info0 === null) {
         logger.debug(`Skipping blank ${id}.${num}`);
         continue;
       }
       let skip = false;
       const idNum = `${id}.${num}`;
-      for (const key of [idNum, `${idNum}.${info.hash}`]) {
+      for (const key of [idNum, `${idNum}.${info0.hash}`]) {
         if (optout[key]) {
           logger.debug(`Skipping opt-out ${key}`);
           skip = true;
@@ -154,7 +161,7 @@ AND e.calendar_id = y.id`;
       }
       for (const hyear of hyears) {
         const prefix = `${idNum}.${hyear}`;
-        for (const key of [prefix, `${prefix}.${info.hash}`]) {
+        for (const key of [prefix, `${prefix}.${info0.hash}`]) {
           if (typeof sent[key] !== 'undefined') {
             logger.debug(`Message for ${key} sent on ${sent[key]}`);
             skip = true;
@@ -162,19 +169,21 @@ AND e.calendar_id = y.id`;
           }
         }
         if (!skip) {
-          info.id = id;
-          info.anniversaryId = `${id}.${hyear}.${info.hash}.${num}`;
-          info.hyear = hyear;
-          info.calendarId = contents.calendarId;
-          info.emailAddress = contents.emailAddress;
+          const info = Object.assign({
+            id: id,
+            anniversaryId: `${id}.${hyear}.${info0.hash}.${num}`,
+            hyear: hyear,
+            calendarId: contents.calendarId,
+            emailAddress: contents.emailAddress,
+          }, info0);
           computeAnniversary(info);
           const diff = info.diff;
-          if (!info.observed) {
-            logger.debug(`No anniversary for ${info.anniversaryId}`);
-          } else if (diff < 0 || diff > 7) {
-            logger.debug(`${info.type} ${info.anniversaryId} occurs in ${diff} days`);
-          } else {
+          if (info.observed && diff >= 0 && diff <= 7) {
             toSend.push(info);
+          } else if (!info.observed) {
+            logger.debug(`No anniversary for ${info.anniversaryId}`);
+          } else {
+            logger.debug(`${info.type} ${info.anniversaryId} occurs in ${diff} days`);
           }
         }
       }
@@ -239,6 +248,8 @@ function computeAnniversary(info) {
     const observed = info.observed = dayjs(hd.greg());
     info.diff = observed.diff(today, 'd');
     info.hd = hd;
+  } else {
+    info.observed = false;
   }
 }
 
@@ -250,14 +261,18 @@ const sqlSentUpdate = `INSERT INTO yahrzeit_sent (yahrzeit_id, name_hash, num, h
  */
 async function processAnniversary(info) {
   const message = makeMessage(info);
-  const status = await sendMail(message);
-
-  if (!argv.dryrun) {
-    logger.debug(sqlSentUpdate);
-    await db.query(sqlSentUpdate, [info.id, info.hash, info.num, info.hyear]);
+  let status;
+  try {
+    status = await sendMail(message);
+    if (!argv.dryrun) {
+      logger.debug(sqlSentUpdate);
+      await db.query(sqlSentUpdate, [info.id, info.hash, info.num, info.hyear]);
+    }
+    numSent++;
+  } catch (err) {
+    logger.error(err);
+    status = err;
   }
-
-  numSent++;
   return status;
 }
 
