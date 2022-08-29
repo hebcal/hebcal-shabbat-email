@@ -122,7 +122,7 @@ AND e.calendar_id = y.id`;
     db.close();
     return;
   }
-  logger.debug(`Got ${rows.length} active subscriptions from DB`);
+  logger.info(`Loaded ${rows.length} active subscriptions from DB`);
 
   const htoday = new HDate(today.toDate());
   const hyears = [htoday.getFullYear()];
@@ -209,7 +209,7 @@ async function loadOptOut() {
   const sql = 'SELECT email_id, name_hash, num, updated FROM yahrzeit_optout WHERE deactivated = 1';
   logger.debug(sql);
   const rows = await db.query(sql);
-  logger.debug(`Got ${rows.length} opt_out from DB`);
+  logger.info(`Loaded ${rows.length} opt_out from DB`);
   const optout = {};
   for (const row of rows) {
     const key0 = `${row.email_id}.${row.num}`;
@@ -228,7 +228,7 @@ FROM yahrzeit_sent
 WHERE datediff(NOW(), sent_date) < 365`;
   logger.debug(sql);
   const rows = await db.query(sql);
-  logger.debug(`Got ${rows.length} recent sent from DB`);
+  logger.info(`Loaded ${rows.length} recently sent from DB`);
   const sent = {};
   for (const row of rows) {
     const key0 = `${row.yahrzeit_id}.${row.num}.${row.hyear}`;
