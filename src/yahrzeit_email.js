@@ -55,7 +55,7 @@ May your loved one’s soul be bound up in the bond of eternal life and may thei
 serve as a continued source of inspiration and comfort to you.
 </div>
 `;
-const BIRTHDAY_POSTSCRIPT = `${BLANK}\n<div>Mazel Tov!</div>\n<div lang="he" dir="rtl">מזל טוב!</div>\n`;
+const BIRTHDAY_POSTSCRIPT = `${BLANK}\n<div>Mazel Tov! <span lang="he" dir="rtl">מזל טוב!</span></div>\n`;
 const DATE_STYLE = `style="color: #941003; white-space: nowrap"`;
 
 let numSent = 0;
