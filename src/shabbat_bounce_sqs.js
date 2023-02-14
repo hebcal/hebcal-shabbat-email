@@ -211,8 +211,19 @@ async function unsubscribe(db, destination, emailAddress, emailId, innerMsg, log
     from: emailAddress,
     to: destination,
     code: '',
-    message: innerMsg,
+    message: {
+      notificationType: innerMsg.notificationType,
+    },
   };
+  const mail = innerMsg.mail;
+  if (typeof mail === 'object') {
+    logMessage.mail = {
+      timestamp: mail.timestamp,
+      source: mail.source,
+      messageId: mail.messageId,
+      commonHeaders: mail.commonHeaders,
+    };
+  }
   if (!rows || !rows.length) {
     logMessage.code='unsub_notfound';
     logStream.write(JSON.stringify(logMessage));

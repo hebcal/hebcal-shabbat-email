@@ -63,7 +63,16 @@ async function deactivateSubs(db, addrs) {
     const t = Math.floor(new Date().getTime() / 1000);
     try {
       const logStream = fs.createWriteStream(subsPath, {flags: 'a'});
-      addrs.forEach((addr) => logStream.write(`status=1 to=${addr} code=deactivated time=${t}\n`));
+      addrs.forEach((addr) => {
+        const logMessage = {
+          time: t,
+          status: 1,
+          to: addr,
+          code: 'deactivated',
+        };
+        logStream.write(JSON.stringify(logMessage));
+        logStream.write('\n');
+      });
       logStream.end();
       return resolve(true);
     } catch (err) {

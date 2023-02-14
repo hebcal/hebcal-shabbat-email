@@ -1,8 +1,7 @@
 {
   "name": "hebcal-shabbat-email",
-  "version": "3.2.3",
+  "version": "3.3.0",
   "description": "Weekly shabbat times email subscription management for hebcal.com",
-  "main": "index.js",
   "engines": {
     "node": ">= 18.0.0"
   },
