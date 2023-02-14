@@ -217,7 +217,7 @@ async function unsubscribe(db, destination, emailAddress, emailId, innerMsg, log
   };
   const mail = innerMsg.mail;
   if (typeof mail === 'object') {
-    logMessage.mail = {
+    logMessage.message.mail = {
       timestamp: mail.timestamp,
       source: mail.source,
       messageId: mail.messageId,
