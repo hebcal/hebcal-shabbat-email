@@ -5,27 +5,27 @@ import {makeDb, dirIfExistsOrCwd} from './makedb';
 import {makeTransporter, translateSmtpStatus} from './common';
 import pino from 'pino';
 import minimist from 'minimist';
-import AWS from 'aws-sdk';
+import {SQSClient, ReceiveMessageCommand, DeleteMessageCommand} from '@aws-sdk/client-sqs';
 
 const argv = minimist(process.argv.slice(2), {
-  boolean: ['quiet'],
-  alias: {q: 'quiet'},
+  boolean: ['quiet', 'verbose'],
+  alias: {q: 'quiet', v: 'verbose'},
 });
 
 const logger = pino({
-  level: argv.quiet ? 'warn' : 'info',
+  level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
 });
 const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 
 let logdir;
 
-AWS.config.update({region: 'us-east-1'});
-const sqs = new AWS.SQS({
-  apiVersion: '2012-11-05',
-  credentials: new AWS.Credentials(
-      config['hebcal.aws.sqs.access_key'],
-      config['hebcal.aws.sqs.secret_key']),
+const sqs = new SQSClient({
+  region: 'us-east-1',
+  credentials: {
+    accessKeyId: config['hebcal.aws.sqs.access_key'],
+    secretAccessKey: config['hebcal.aws.sqs.secret_key'],
+  },
 });
 
 const transporter = makeTransporter(config);
@@ -64,7 +64,7 @@ function getStdReason(bounce) {
 }
 
 /**
- * @param {AWS.SQS} sqs
+ * @param {SQSClient} sqs
  * @param {*} db
  */
 async function readBounceQueue(sqs, db) {
@@ -80,7 +80,8 @@ async function readBounceQueue(sqs, db) {
   const sql = 'INSERT INTO hebcal_shabbat_bounce (email_address,std_reason,full_reason,deactivated) VALUES (?,?,?,0)';
   while (true) {
     logger.debug(`Bounces: polling for a batch`);
-    const response = await sqs.receiveMessage(params).promise();
+    const command = new ReceiveMessageCommand(params);
+    const response = await sqs.send(command);
     if (!response.Messages || !response.Messages.length) {
       logger.info(`Bounces: done`);
       return new Promise((resolve, reject) => {
@@ -117,13 +118,18 @@ async function readBounceQueue(sqs, db) {
     }
     logger.debug(`Bounces: deleting ${response.Messages.length} messages`);
     await Promise.all(response.Messages.map((message) => {
-      sqs.deleteMessage({QueueUrl: queueURL, ReceiptHandle: message.ReceiptHandle}).promise();
+      const params = {
+        QueueUrl: queueURL,
+        ReceiptHandle: message.ReceiptHandle,
+      };
+      const command = new DeleteMessageCommand(params);
+      return sqs.send(command);
     }));
   }
 }
 
 /**
- * @param {AWS.SQS} sqs
+ * @param {SQSClient} sqs
  * @param {*} db
  */
 async function readUnsubQueue(sqs, db) {
@@ -138,7 +144,8 @@ async function readUnsubQueue(sqs, db) {
   };
   while (true) {
     logger.debug(`Unsubscribes: polling for a batch`);
-    const response = await sqs.receiveMessage(params).promise();
+    const command = new ReceiveMessageCommand(params);
+    const response = await sqs.send(command);
     if (!response.Messages || !response.Messages.length) {
       logger.info(`Unsubscribes: done`);
       return new Promise((resolve, reject) => {
@@ -170,7 +177,12 @@ async function readUnsubQueue(sqs, db) {
     }
     logger.info(`Unsubscribes: deleting ${response.Messages.length} messages`);
     await Promise.all(response.Messages.map((message) => {
-      sqs.deleteMessage({QueueUrl: queueURL, ReceiptHandle: message.ReceiptHandle}).promise();
+      const params = {
+        QueueUrl: queueURL,
+        ReceiptHandle: message.ReceiptHandle,
+      };
+      const command = new DeleteMessageCommand(params);
+      return sqs.send(command);
     }));
   }
 }

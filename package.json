@@ -29,11 +29,11 @@
     "eslint-config-google": "^0.14.0"
   },
   "dependencies": {
+    "@aws-sdk/client-sqs": "^3.267.0",
     "@hebcal/core": "^3.50.3",
     "@hebcal/geo-sqlite": "^4.8.1",
     "@hebcal/icalendar": "^4.19.0",
     "@hebcal/rest-api": "^4.3.15",
-    "aws-sdk": "^2.1314.0",
     "better-sqlite3": "^8.1.0",
     "csv-parse": "^5.3.5",
     "dayjs": "^1.11.7",
