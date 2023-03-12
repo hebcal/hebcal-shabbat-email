@@ -436,18 +436,22 @@ function isNumKey(k) {
  * @return {number}
  */
 function getMaxYahrzeitId(query) {
-  const ids = Object.keys(query)
-      .filter((k) => k[0] == 'y' && isNumKey(k))
-      .map((k) => +(k.substring(1)))
-      .map((id) => empty(query['y' + id]) ? 0 : id);
-  const max = Math.max(...ids);
-  const valid = [];
-  for (let i = 1; i <= max; i++) {
-    if (!empty(query['d' + i]) && !empty(query['m' + i]) && !empty(query['y' + i])) {
-      valid.push(i);
+  let max = 0;
+  for (const k of Object.keys(query)) {
+    const k0 = k[0];
+    if ((k0 === 'y' || k0 === 'x') && isNumKey(k)) {
+      let id = +(k.substring(1));
+      if (empty(query[k])) {
+        id = 0;
+      } else if (k0 === 'y' && (empty(query['d' + id]) || empty(query['m' + id]))) {
+        id = 0;
+      }
+      if (id > max) {
+        max = id;
+      }
     }
   }
-  return valid.length === 0 ? 0 : Math.max(...valid);
+  return max;
 }
 
 /**
@@ -456,9 +460,7 @@ function getMaxYahrzeitId(query) {
  * @return {*}
  */
 async function getYahrzeitDetailForId(query, id) {
-  const dd = query[`d${id}`];
-  const mm = query[`m${id}`];
-  const yy = query[`y${id}`];
+  const {yy, mm, dd} = getDateForId(query, id);
   if (empty(dd) || empty(mm) || empty(yy)) {
     return null;
   }
@@ -473,6 +475,28 @@ async function getYahrzeitDetailForId(query, id) {
   return {num: id, dd, mm, yy, sunset, type, name, day, hash};
 }
 
+/**
+ * @private
+ * @param {Object<string,string>} query
+ * @param {number} id
+ * @return {any}
+ */
+function getDateForId(query, id) {
+  const date = query['x' + id];
+  if (typeof date === 'string' && date.length === 10) {
+    const yy = date.substring(0, 4);
+    const gm = date.substring(5, 7);
+    const mm = gm[0] === '0' ? gm[1] : gm;
+    const gd = date.substring(8, 10);
+    const dd = gd[0] === '0' ? gd[1] : gd;
+    return {yy, mm, dd};
+  }
+  const yy = query['y' + id];
+  const mm = query['m' + id];
+  const dd = query['d' + id];
+  return {yy, mm, dd};
+}
+
 // eslint-disable-next-line require-jsdoc
 function usage() {
   const PROG = 'yahrzeit_email.js';
@@ -484,6 +508,9 @@ Options:
   --dryrun         Prints the actions that ${PROG} would take
                      but does not remove anything
   --quiet          Only emit warnings and errors
+  --verbose        Extra debugging information
+  --force          Run even if it's not Thursday
+  --ini <file>     Use non-default hebcal-dot-com.ini
 `;
   console.log(usage);
 }
