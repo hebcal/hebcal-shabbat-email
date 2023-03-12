@@ -349,13 +349,14 @@ ${imgOpen}
   };
   if (isYahrzeit) {
     const dt = erev.toDate();
+    const eventTimeStr = erev.day() === 6 ? '20:00' : '16:30';
     const ev = new Event(
         new HDate(dt),
         `${info.name} ${typeStr} reminder`,
         flags.USER_EVENT,
         {
           eventTime: dt,
-          eventTimeStr: '15:00',
+          eventTimeStr,
           memo: `Hebcal joins you in ${verb} ${info.name}, whose ${nth} ${typeStr} occurs on ` +
           `${observed.format('dddd, MMMM D')}, corresponding to the ${hebdate}.\\n\\n` +
           `${typeStr} begins at sundown on ${erev.format('dddd, MMMM D')} and continues until ` +
