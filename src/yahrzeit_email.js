@@ -455,6 +455,21 @@ function getMaxYahrzeitId(query) {
 }
 
 /**
+ * @private
+ * @param {string} str
+ * @return {string}
+ */
+function getAnniversaryType(str) {
+  const s = str.toLowerCase();
+  switch (s[0]) {
+    case 'y': return 'Yahrzeit';
+    case 'b': return 'Birthday';
+    case 'a': return 'Anniversary';
+  }
+  return 'Yahrzeit';
+}
+
+/**
  * @param {Object<string,string>} query
  * @param {number} id
  * @return {*}
@@ -464,11 +479,11 @@ async function getYahrzeitDetailForId(query, id) {
   if (empty(dd) || empty(mm) || empty(yy)) {
     return null;
   }
-  const type = query[`t${id}`] || 'Yahrzeit';
+  const type = getAnniversaryType(query['t' + id]);
   const sunset = query[`s${id}`];
   const name = query[`n${id}`] ? query[`n${id}`].trim() : `Person${id}`;
   let day = dayjs(new Date(yy, mm - 1, dd));
-  if (sunset === 'on') {
+  if (sunset === 'on' || sunset == 1) {
     day = day.add(1, 'day');
   }
   const hash = await murmur32Hex([day.format('YYYY-MM-DD'), type].join('-'));
