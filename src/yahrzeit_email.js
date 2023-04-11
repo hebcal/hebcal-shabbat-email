@@ -289,8 +289,9 @@ async function processAnniversary(info) {
 function makeMessage(info) {
   const type = info.type;
   const isYahrzeit = Boolean(type === 'Yahrzeit');
+  const isOther = (type === 'Other');
   const UTM_PARAM = `utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=${type.toLowerCase()}-reminder`;
-  const typeStr = isYahrzeit ? type : `Hebrew ${type}`;
+  const typeStr = isYahrzeit ? type : isOther ? 'Hebrew Anniversary' : `Hebrew ${type}`;
   const observed = info.observed;
   const subject = makeSubject(typeStr, observed);
   logger.info(`${info.anniversaryId} - ${info.diff} days - ${subject}`);
@@ -312,7 +313,8 @@ as the Yahrzeit begins.` : '';
   const unsubUrl = `${urlBase}/email?id=${info.id}&hash=${info.hash}&num=${info.num}&unsubscribe=1`;
   const emailAddress = info.emailAddress;
   // eslint-disable-next-line max-len
-  const imgOpen = `<img src="https://www.hebcal.com/email/open?msgid=${msgid}&amp;loc=${typeStr}&amp;${UTM_PARAM}" alt="" width="1" height="1" border="0" style="height:1px!important;width:1px!important;border-width:0!important;margin-top:0!important;margin-bottom:0!important;margin-right:0!important;margin-left:0!important;padding-top:0!important;padding-bottom:0!important;padding-right:0!important;padding-left:0!important">`;
+  const imgOpen = `<img src="https://www.hebcal.com/email/open?msgid=${msgid}&amp;loc=${type}&amp;${UTM_PARAM}" alt="" width="1" height="1" border="0" style="height:1px!important;width:1px!important;border-width:0!important;margin-top:0!important;margin-bottom:0!important;margin-right:0!important;margin-left:0!important;padding-top:0!important;padding-bottom:0!important;padding-right:0!important;padding-left:0!important">`;
+  const prefix = isOther ? info.name : `Hebcal joins you in ${verb} ${info.name}, whose ${nth} ${typeStr}`;
   const message = {
     to: emailAddress,
     from: 'Hebcal <shabbat-owner@hebcal.com>',
@@ -327,7 +329,7 @@ as the Yahrzeit begins.` : '';
       'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
     },
     html: `<div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
-<div>Hebcal joins you in ${verb} ${info.name}, whose ${nth} ${typeStr} occurs on
+<div>${prefix} occurs on
 <time datetime="${observed.format('YYYY-MM-DD')}" ${DATE_STYLE}>${observed.format('dddd, MMMM D')}</time>,
 corresponding to the ${hebdate}.</div>
 ${BLANK}
@@ -466,6 +468,7 @@ function getAnniversaryType(str) {
       case 'y': return 'Yahrzeit';
       case 'b': return 'Birthday';
       case 'a': return 'Anniversary';
+      case 'o': return 'Other';
     }
   }
   return 'Yahrzeit';
@@ -483,13 +486,28 @@ async function getYahrzeitDetailForId(query, id) {
   }
   const type = getAnniversaryType(query['t' + id]);
   const sunset = query[`s${id}`];
-  const name = query[`n${id}`] ? query[`n${id}`].trim() : `Person${id}`;
+  const name = getAnniversaryName(query, id, type);
   let day = dayjs(new Date(yy, mm - 1, dd));
   if (sunset === 'on' || sunset == 1) {
     day = day.add(1, 'day');
   }
   const hash = await murmur32Hex([day.format('YYYY-MM-DD'), type].join('-'));
   return {num: id, dd, mm, yy, sunset, type, name, day, hash};
+}
+
+/**
+ * @param {Object<string,any>} query
+ * @param {number} id
+ * @param {string} type
+ * @return {string}
+ */
+function getAnniversaryName(query, id, type) {
+  const name0 = query[`n${id}`] && query[`n${id}`].trim();
+  if (name0) {
+    return name0;
+  }
+  const prefix = type === 'Other' ? 'Untitled' : 'Person';
+  return prefix + id;
 }
 
 /**
