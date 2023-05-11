@@ -620,7 +620,7 @@ function parseAllConfigs(subs) {
   if (argv.positive || argv.negative) {
     let filtered = 0;
     for (const [to, cfg] of subs.entries()) {
-      const isPositive = cfg.location.getLongitude() >= 0;
+      const isPositive = cfg.location.getLongitude() > -20;
       if ((argv.positive && !isPositive) || (argv.negative && isPositive)) {
         subs.delete(to);
         filtered++;
