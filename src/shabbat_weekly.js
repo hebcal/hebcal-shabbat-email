@@ -13,7 +13,8 @@ import {appendIsraelAndTracking} from '@hebcal/rest-api';
 import {htmlToText} from 'html-to-text';
 
 const argv = minimist(process.argv.slice(2), {
-  boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose', 'localhost'],
+  boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose', 'localhost',
+    'positive', 'negative'],
   alias: {h: 'help', n: 'dryrun', q: 'quiet', f: 'force', v: 'verbose'},
 });
 if (argv.help) {
@@ -44,9 +45,11 @@ const [midnight, endOfWeek] = getStartAndEnd(TODAY);
 logger.debug(`start=${midnight.format('YYYY-MM-DD')}, endOfWeek=${endOfWeek.format('YYYY-MM-DD')}`);
 
 const FORMAT_DOW_MONTH_DAY = 'dddd, MMMM D';
+const geoDb = new GeoDb(logger, 'zips.sqlite3', 'geonames.sqlite3');
 
 main()
     .then(() => {
+      geoDb.close();
       logger.info('Success!');
     })
     .catch((err) => {
@@ -71,22 +74,34 @@ async function main() {
 
   if (!argv.force) {
     const alreadySent = loadSentLog(sentLogFilename);
-    logger.info(`Skipping ${alreadySent.size} users from previous run`);
-    alreadySent.forEach((x) => subs.delete(x));
+    if (alreadySent.size > 0) {
+      logger.info(`Skipping ${alreadySent.size} users from previous run`);
+      alreadySent.forEach((x) => subs.delete(x));
+    }
   }
 
-  // open the database
-  const lockfile = fs.openSync('/tmp/hebcal-shabbat-weekly.lock', 'w');
-  await flock(lockfile, 'ex');
+  return new Promise((resolve, reject) => {
+    const lockfile = fs.openSync('/tmp/hebcal-shabbat-weekly.lock', 'w');
+    flock(lockfile, 'ex', (err) => {
+      if (err) {
+        logger.error(err);
+        reject(err);
+      }
+      mainInner(subs, config, sentLogFilename).then(() => {
+        fs.closeSync(lockfile);
+        resolve();
+      });
+    });
+  });
+}
 
-  const dbdir = await dirIfExistsOrCwd('/usr/lib/hebcal');
-  const zipsFilename = `${dbdir}/zips.sqlite3`;
-  const geonamesFilename = `${dbdir}/geonames.sqlite3`;
-  const geoDb = new GeoDb(logger, zipsFilename, geonamesFilename);
-
-  parseAllConfigs(subs, geoDb);
-
-  geoDb.close();
+/**
+ * @param {Map<string,any>} subs
+ * @param {Object<string,any>} config
+ * @param {string} sentLogFilename
+ */
+async function mainInner(subs, config, sentLogFilename) {
+  parseAllConfigs(subs);
 
   logger.info(`Sorting ${subs.size} users by lat/long`);
   const cfgs = Array.from(subs.values());
@@ -130,9 +145,6 @@ async function main() {
   }
   logger.info(`Sent ${count} messages`);
   logStream.end();
-
-  await flock(lockfile, 'un');
-  fs.closeSync(lockfile);
 }
 
 /**
@@ -481,6 +493,7 @@ ${when} on ${strtime}.`;
 /**
  * @param {Map<string,any>} config
  * @param {string[]} addrs
+ * @return {Promise<Map<string,any>>}
  */
 async function loadSubs(config, addrs) {
   const db = makeDb(logger, config);
@@ -549,6 +562,7 @@ function loadSentLog(sentLogFilename) {
   try {
     lines = fs.readFileSync(sentLogFilename, 'utf-8').split('\n');
   } catch (error) {
+    logger.info(`No ${sentLogFilename} logfile from prior run`);
     return result; // no previous run to scan
   }
   for (const line of lines) {
@@ -564,10 +578,9 @@ function loadSentLog(sentLogFilename) {
  * Scans subs map and removes invalid entries
  * @param {string} to
  * @param {Object} cfg
- * @param {GeoDb} geoDb
  * @return {boolean}
  */
-function parseConfig(to, cfg, geoDb) {
+function parseConfig(to, cfg) {
   const location = cfg.zip ? geoDb.lookupZip(cfg.zip) :
     cfg.legacyCity ? geoDb.lookupLegacyCity(cfg.legacyCity) :
     cfg.geonameid ? geoDb.lookupGeoname(cfg.geonameid) :
@@ -576,7 +589,7 @@ function parseConfig(to, cfg, geoDb) {
   if (!location) {
     logger.warn('Skipping bad config: ' + JSON.stringify(cfg));
     return false;
-  } else if (location.getLongitude() === 0 && location.getLongitude === 0) {
+  } else if (location.getLongitude() === 0 && location.getLatitude() === 0) {
     logger.warn(`Suspicious zero lat/long for to=${to}, id=${cfg.id}`);
     return false;
   } else if (!location.getTzid()) {
@@ -591,19 +604,31 @@ function parseConfig(to, cfg, geoDb) {
 /**
  * Scans subs map and removes invalid entries
  * @param {Map<string,any>} subs
- * @param {GeoDb} geoDb
  */
-function parseAllConfigs(subs, geoDb) {
-  logger.info('Parsing all configs');
+function parseAllConfigs(subs) {
+  logger.info(`Parsing ${subs.size} configs`);
   const failures = [];
   for (const [to, cfg] of subs.entries()) {
-    if (!parseConfig(to, cfg, geoDb)) {
+    if (!parseConfig(to, cfg)) {
       failures.push(to);
     }
   }
   if (failures.length) {
     failures.forEach((x) => subs.delete(x));
     logger.warn(`Skipped ${failures.length} subscribers due to config failures`);
+  }
+  if (argv.positive || argv.negative) {
+    let filtered = 0;
+    for (const [to, cfg] of subs.entries()) {
+      const isPositive = cfg.location.getLongitude() >= 0;
+      if ((argv.positive && !isPositive) || (argv.negative && isPositive)) {
+        subs.delete(to);
+        filtered++;
+      }
+    }
+    if (filtered > 0) {
+      logger.info(`Filtered ${filtered} subscribers based on longitude`);
+    }
   }
 }
 

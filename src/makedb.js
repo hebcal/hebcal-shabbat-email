@@ -43,7 +43,7 @@ export function makeDb(logger, iniConfig) {
  * Returns directory name if it exists, else '.' for current working directory
  * @async
  * @param {string} dir
- * @return {string}
+ * @return {Promise<string>}
  */
 export async function dirIfExistsOrCwd(dir) {
   return new Promise((resolve, reject) => {
