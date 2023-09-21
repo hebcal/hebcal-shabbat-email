@@ -320,6 +320,7 @@ function genSubjectAndBody(events, options, cfg) {
   for (const ev of events) {
     const timed = Boolean(ev.eventTime);
     const title = timed ? ev.renderBrief() : ev.render();
+    const title1 = title.replace(/'/g, '’');
     const desc = ev.getDesc();
     const hd = ev.getDate();
     const dt = dayjs(hd.greg());
@@ -343,13 +344,13 @@ function genSubjectAndBody(events, options, cfg) {
       const verb = (desc === 'Candle lighting' || desc === 'Havdalah') ? ' is' : '';
       body += `  ${title}${verb} at ${hourMin}\n`;
       const emojiSuffix = (mask & flags.CHANUKAH_CANDLES) ? ` ${emoji}` : '';
-      htmlBody += `<div style="${ITEM_STYLE}">${title}${verb} at <strong>${hourMin}</strong>${emojiSuffix}</div>\n`;
+      htmlBody += `<div style="${ITEM_STYLE}">${title1}${verb} at <strong>${hourMin}</strong>${emojiSuffix}</div>\n`;
     } else if (mask === flags.PARSHA_HASHAVUA) {
       sedra = title.substring(title.indexOf(' ') + 1);
       body += `  Torah portion: ${title}\n`;
       const url = ev.url();
       const url2 = urlEncodeAndTrack(url, options.il);
-      htmlBody += `<div style="${ITEM_STYLE}">Torah portion: <a href="${url2}">${title}</a></div>\n`;
+      htmlBody += `<div style="${ITEM_STYLE}">Torah portion: <a href="${url2}">${title1}</a></div>\n`;
     } else {
       const dow = dt.day();
       if (dow === 6 && !sedra && (mask & flags.CHAG || ev.cholHaMoedDay)) {
@@ -360,9 +361,9 @@ function genSubjectAndBody(events, options, cfg) {
       htmlBody += `<div style="${ITEM_STYLE}">`;
       if (url) {
         const url2 = urlEncodeAndTrack(url, options.il);
-        htmlBody += `<a href="${url2}">${title}</a>`;
+        htmlBody += `<a href="${url2}">${title1}</a>`;
       } else {
-        htmlBody += title;
+        htmlBody += title1;
       }
       const emojiSuffix = emoji ? ` ${emoji}` : '';
       htmlBody += `${emojiSuffix}</div>\n`;
