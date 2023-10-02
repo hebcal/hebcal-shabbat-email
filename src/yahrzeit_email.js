@@ -351,7 +351,8 @@ ${imgOpen}
   };
   if (isYahrzeit) {
     const dt = erev.toDate();
-    const eventTimeStr = erev.day() === 6 ? '20:00' : '16:30';
+    const dow = erev.day();
+    const eventTimeStr = dow === 6 ? '20:00' : dow === 5 ? '14:30' : '16:30';
     const ev = new Event(
         new HDate(dt),
         `${info.name} ${typeStr} reminder`,
