@@ -177,9 +177,9 @@ function getStartAndEnd(now) {
  * mails the user
  * @param {nodemailer.Mail} transporter
  * @param {any} cfg
- * @return {Object}
+ * @return {Promise<Object>}
  */
-function mailUser(transporter, cfg) {
+async function mailUser(transporter, cfg) {
   const message = getMessage(cfg);
   if (argv.dryrun) {
     return undefined;
