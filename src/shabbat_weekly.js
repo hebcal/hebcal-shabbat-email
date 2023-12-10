@@ -291,6 +291,7 @@ function getSubjectAndBody(cfg) {
     il: location.getIsrael(),
     sedrot: true,
     shabbatMevarchim: true,
+    useElevation: cfg.ue,
   };
   if (typeof cfg.m === 'number') {
     options.havdalahMins = cfg.m;
@@ -506,6 +507,7 @@ async function loadSubs(config, addrs) {
        email_candles_zipcode,
        email_candles_city,
        email_candles_geonameid,
+       email_use_elevation,
        email_candles_havdalah,
        email_havdalah_tzeit,
        email_sundown_candles
@@ -538,6 +540,7 @@ function makeCandlesCfg(row) {
     m: row.email_candles_havdalah,
     M: Boolean(row.email_havdalah_tzeit),
     b: row.email_sundown_candles,
+    ue: Boolean(r.email_use_elevation),
   };
   if (row.email_candles_zipcode) {
     cfg.zip = row.email_candles_zipcode;
