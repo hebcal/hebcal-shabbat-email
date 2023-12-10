@@ -42,6 +42,8 @@ if (!shouldSendEmailToday(TODAY0) && !argv.force) {
   process.exit(0);
 }
 const [midnight, endOfWeek] = getStartAndEnd(TODAY);
+const midnightDt = midnight.toDate();
+const endOfWeekDt = endOfWeek.toDate();
 logger.debug(`start=${midnight.format('YYYY-MM-DD')}, endOfWeek=${endOfWeek.format('YYYY-MM-DD')}`);
 
 const FORMAT_DOW_MONTH_DAY = 'dddd, MMMM D';
@@ -279,12 +281,13 @@ function getSubjectAndBody(cfg) {
       cfg.m === prevCfg.m &&
       cfg.M === prevCfg.M &&
       cfg.b === prevCfg.b &&
+      cfg.ue === prevCfg.ue &&
       location.geoid === prevCfg.location.geoid) {
     return prevSubjAndBody;
   }
   const options = {
-    start: midnight.toDate(),
-    end: endOfWeek.toDate(),
+    start: midnightDt,
+    end: endOfWeekDt,
     location: location,
     candlelighting: true,
     candleLightingMins: cfg.b,
