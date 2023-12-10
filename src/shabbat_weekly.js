@@ -540,7 +540,7 @@ function makeCandlesCfg(row) {
     m: row.email_candles_havdalah,
     M: Boolean(row.email_havdalah_tzeit),
     b: row.email_sundown_candles,
-    ue: Boolean(r.email_use_elevation),
+    ue: Boolean(row.email_use_elevation),
   };
   if (row.email_candles_zipcode) {
     cfg.zip = row.email_candles_zipcode;
