@@ -7,8 +7,8 @@ import {flock} from 'fs-ext';
 import minimist from 'minimist';
 import nodemailer from 'nodemailer';
 import {GeoDb} from '@hebcal/geo-sqlite';
-import {makeDb, dirIfExistsOrCwd} from './makedb';
-import {shouldSendEmailToday, makeTransporter, htmlToTextOptions, msleep} from './common';
+import {makeDb, dirIfExistsOrCwd} from './makedb.js';
+import {shouldSendEmailToday, makeTransporter, htmlToTextOptions, msleep} from './common.js';
 import {appendIsraelAndTracking} from '@hebcal/rest-api';
 import {htmlToText} from 'html-to-text';
 

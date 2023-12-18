@@ -1,8 +1,8 @@
 /* eslint-disable require-jsdoc */
 import fs from 'fs';
 import ini from 'ini';
-import {makeDb, dirIfExistsOrCwd} from './makedb';
-import {makeTransporter, translateSmtpStatus} from './common';
+import {makeDb, dirIfExistsOrCwd} from './makedb.js';
+import {makeTransporter, translateSmtpStatus} from './common.js';
 import pino from 'pino';
 import minimist from 'minimist';
 import {SQSClient, ReceiveMessageCommand, DeleteMessageCommand} from '@aws-sdk/client-sqs';

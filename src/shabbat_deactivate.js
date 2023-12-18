@@ -3,7 +3,7 @@ import fs from 'fs';
 import ini from 'ini';
 import pino from 'pino';
 import minimist from 'minimist';
-import {makeDb, dirIfExistsOrCwd} from './makedb';
+import {makeDb, dirIfExistsOrCwd} from './makedb.js';
 
 const PROG = 'shabbat_deactivate.js';
 const COUNT_DEFAULT = 7;

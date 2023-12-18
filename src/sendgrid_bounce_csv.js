@@ -2,10 +2,10 @@
 import fs from 'fs';
 import ini from 'ini';
 import {parse} from 'csv-parse';
-import {makeDb} from './makedb';
+import {makeDb} from './makedb.js';
 import pino from 'pino';
 import minimist from 'minimist';
-import {translateSmtpStatus} from './common';
+import {translateSmtpStatus} from './common.js';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['quiet'],

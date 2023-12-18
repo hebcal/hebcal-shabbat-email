@@ -5,8 +5,8 @@ import {Event, flags, HDate, HebrewCalendar, Locale, months} from '@hebcal/core'
 import pino from 'pino';
 import minimist from 'minimist';
 import nodemailer from 'nodemailer';
-import {makeDb} from './makedb';
-import {getChagOnDate, makeTransporter, htmlToTextOptions, msleep} from './common';
+import {makeDb} from './makedb.js';
+import {getChagOnDate, makeTransporter, htmlToTextOptions, msleep} from './common.js';
 import {IcalEvent} from '@hebcal/icalendar';
 import mmh3 from 'murmurhash3';
 import util from 'util';
