@@ -28,8 +28,8 @@
     "eslint-config-google": "^0.14.0"
   },
   "dependencies": {
-    "@aws-sdk/client-sqs": "^3.501.0",
-    "@hebcal/core": "^5.1.0",
+    "@aws-sdk/client-sqs": "^3.503.1",
+    "@hebcal/core": "^5.2.0",
     "@hebcal/geo-sqlite": "^5.0.3",
     "@hebcal/icalendar": "^5.0.4",
     "@hebcal/rest-api": "^5.0.2",
@@ -41,7 +41,7 @@
     "ini": "^4.1.1",
     "minimist": "^1.2.8",
     "murmurhash3": "^0.5.0",
-    "mysql2": "^3.9.0",
+    "mysql2": "^3.9.1",
     "nodemailer": "^6.9.8",
     "nodemailer-html-to-text": "^3.2.0",
     "pino": "^8.17.2",
