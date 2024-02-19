@@ -144,7 +144,8 @@ async function loadSubsFromDb(rows) {
     hyears.push(hyears[0] + 1);
   }
   const optout = await loadOptOut();
-  const sent = await loadRecentSent('yahrzeit_sent');
+  const sent7 = await loadRecentSent('yahrzeit_sent7');
+  const sent1 = await loadRecentSent('yahrzeit_sent1');
 
   const toSend = [];
   for (const row of rows) {
@@ -177,36 +178,49 @@ async function loadSubsFromDb(rows) {
         continue;
       }
       for (const hyear of hyears) {
-        const prefix = `${idNum}.${hyear}`;
-        for (const key of [prefix, `${prefix}.${info0.hash}`]) {
-          if (typeof sent[key] !== 'undefined') {
-            logger.debug(`Message for ${key} sent on ${sent[key]}`);
-            skip = true;
-            break;
-          }
-        }
-        if (!skip) {
-          const info = Object.assign({
-            id: id,
-            anniversaryId: `${id}.${hyear}.${info0.hash}.${num}`,
-            hyear: hyear,
-            calendarId: contents.calendarId,
-            emailAddress: contents.emailAddress,
-          }, info0);
-          computeAnniversary(info);
-          const diff = info.diff;
-          if (info.observed && diff >= 0 && diff <= 7) {
+        for (const ndays of [7, 1]) {
+          const sent = ndays === 7 ? sent7 : sent1;
+          const info = makeSubInfo(contents, num, info0, hyear, sent, ndays);
+          if (info) {
             toSend.push(info);
-          } else if (!info.observed) {
-            logger.debug(`No anniversary for ${info.anniversaryId}`);
-          } else {
-            logger.debug(`${info.type} ${info.anniversaryId} occurs in ${diff} days`);
+            break;
           }
         }
       }
     }
   }
   return toSend;
+}
+
+// eslint-disable-next-line require-jsdoc
+function makeSubInfo(contents, num, info0, hyear, sent, maxDays) {
+  const id = contents.id;
+  const idNum = `${id}.${num}`;
+  const prefix = `${idNum}.${hyear}`;
+  for (const key of [prefix, `${prefix}.${info0.hash}`]) {
+    if (typeof sent[key] !== 'undefined') {
+      logger.debug(`Message for ${key} sent on ${sent[key]}`);
+      return false;
+    }
+  }
+  const info = Object.assign({
+    id: id,
+    anniversaryId: `${id}.${hyear}.${info0.hash}.${num}`,
+    hyear: hyear,
+    calendarId: contents.calendarId,
+    emailAddress: contents.emailAddress,
+    reminderDays: maxDays,
+  }, info0);
+  computeAnniversary(info);
+  const diff = info.diff;
+  if (info.observed && diff >= 0 && diff <= maxDays) {
+    return info;
+  } else if (!info.observed) {
+    logger.debug(`No anniversary for ${info.anniversaryId}`);
+  } else {
+    logger.debug(`${info.type} ${info.anniversaryId} occurs in ${diff} days`);
+  }
+  return false;
 }
 
 /**
@@ -236,7 +250,7 @@ FROM ${tableName}
 WHERE datediff(NOW(), sent_date) < 365`;
   logger.debug(sql);
   const rows = await db.query(sql);
-  logger.info(`Loaded ${rows.length} recently sent from DB`);
+  logger.info(`Loaded ${rows.length} recently sent from ${tableName}`);
   const sent = {};
   for (const row of rows) {
     const key0 = `${row.yahrzeit_id}.${row.num}.${row.hyear}`;
@@ -264,9 +278,6 @@ function computeAnniversary(info) {
   }
 }
 
-const sqlSentUpdate = `INSERT INTO yahrzeit_sent (yahrzeit_id, name_hash, num, hyear, sent_date)
- VALUES (?, ?, ?, ?, NOW())`;
-
 /**
  * @param {Promise<Object<string,string>>} info
  */
@@ -276,6 +287,10 @@ async function processAnniversary(info) {
   try {
     status = await sendMail(message);
     if (!argv.dryrun) {
+      const tableName = `yahrzeit_sent${info.reminderDays}`;
+      const sqlSentUpdate = `INSERT INTO ${tableName}
+ (yahrzeit_id, name_hash, num, hyear, sent_date)
+ VALUES (?, ?, ?, ?, NOW())`;
       logger.debug(sqlSentUpdate);
       await db.query(sqlSentUpdate, [info.id, info.hash, info.num, info.hyear]);
       if (argv.sleeptime) {
