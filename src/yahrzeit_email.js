@@ -8,11 +8,8 @@ import nodemailer from 'nodemailer';
 import {makeDb} from './makedb.js';
 import {getChagOnDate, makeTransporter, htmlToTextOptions, msleep} from './common.js';
 import {IcalEvent} from '@hebcal/icalendar';
-import mmh3 from 'murmurhash3';
-import util from 'util';
+import {murmur32HexSync} from 'murmurhash3';
 import {htmlToText} from 'nodemailer-html-to-text';
-
-const murmur32Hex = util.promisify(mmh3.murmur32Hex);
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose', 'localhost'],
@@ -75,6 +72,7 @@ main()
 /**
  * Sends the message via nodemailer, or no-op for dryrun
  * @param {Object} message
+ * @return {Promise<any>}
  */
 async function sendMail(message) {
   if (argv.dryrun) {
@@ -124,13 +122,29 @@ AND e.calendar_id = y.id`;
   }
   logger.info(`Loaded ${rows.length} active subscriptions from DB`);
 
+  const toSend = await loadSubsFromDb(rows);
+
+  logger.debug(`Processing ${toSend.length} messages`);
+  for (const info of toSend) {
+    const status = await processAnniversary(info);
+    logger.debug(status);
+  }
+
+  db.close();
+}
+
+/**
+ * @param {any[]} rows
+ * @return {Promise<any[]>}
+ */
+async function loadSubsFromDb(rows) {
   const htoday = new HDate(today.toDate());
   const hyears = [htoday.getFullYear()];
   if (htoday.getMonth() === months.ELUL) {
     hyears.push(hyears[0] + 1);
   }
   const optout = await loadOptOut();
-  const sent = await loadRecentSent();
+  const sent = await loadRecentSent('yahrzeit_sent');
 
   const toSend = [];
   for (const row of rows) {
@@ -192,18 +206,11 @@ AND e.calendar_id = y.id`;
       }
     }
   }
-
-  logger.debug(`Processing ${toSend.length} messages`);
-  for (const info of toSend) {
-    const status = await processAnniversary(info);
-    logger.debug(status);
-  }
-
-  db.close();
+  return toSend;
 }
 
 /**
- * @return {Object<string,Date>}
+ * @return {Promise<Object<string,Date>>}
  */
 async function loadOptOut() {
   const sql = 'SELECT email_id, name_hash, num, updated FROM yahrzeit_optout WHERE deactivated = 1';
@@ -220,11 +227,12 @@ async function loadOptOut() {
 }
 
 /**
- * @return {Object<string,Date>}
+ * @param {string} tableName
+ * @return {Promise<Object<string,Date>>}
  */
-async function loadRecentSent() {
+async function loadRecentSent(tableName) {
   const sql = `SELECT yahrzeit_id, name_hash, num, hyear, sent_date
-FROM yahrzeit_sent
+FROM ${tableName}
 WHERE datediff(NOW(), sent_date) < 365`;
   logger.debug(sql);
   const rows = await db.query(sql);
@@ -260,7 +268,7 @@ const sqlSentUpdate = `INSERT INTO yahrzeit_sent (yahrzeit_id, name_hash, num, h
  VALUES (?, ?, ?, ?, NOW())`;
 
 /**
- * @param {Object<string,string>} info
+ * @param {Promise<Object<string,string>>} info
  */
 async function processAnniversary(info) {
   const message = makeMessage(info);
@@ -478,7 +486,7 @@ function getAnniversaryType(str) {
 /**
  * @param {Object<string,string>} query
  * @param {number} id
- * @return {*}
+ * @return {Promise<any>}
  */
 async function getYahrzeitDetailForId(query, id) {
   const {yy, mm, dd} = getDateForId(query, id);
@@ -492,7 +500,7 @@ async function getYahrzeitDetailForId(query, id) {
   if (sunset === 'on' || sunset == 1) {
     day = day.add(1, 'day');
   }
-  const hash = await murmur32Hex([day.format('YYYY-MM-DD'), type].join('-'));
+  const hash = murmur32HexSync([day.format('YYYY-MM-DD'), type].join('-'));
   return {num: id, dd, mm, yy, sunset, type, name, day, hash};
 }
 
