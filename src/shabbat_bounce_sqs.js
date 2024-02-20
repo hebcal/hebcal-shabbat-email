@@ -236,11 +236,13 @@ async function unsubscribe(db, destination, emailAddress, emailId, innerMsg, log
   if (row.email_status == 'unsubscribed') {
     logMessage.code='unsub_twice';
     logStream.write(JSON.stringify(logMessage));
+    logStream.write('\n');
     return errorMail(origEmail);
   }
   logMessage.status = 1;
   logMessage.code='unsub';
   logStream.write(JSON.stringify(logMessage));
+  logStream.write('\n');
   const sql2 = 'UPDATE hebcal_shabbat_email SET email_status=\'unsubscribed\' WHERE email_id = ?';
   logger.debug(sql2);
   await db.query(sql2, [row.email_id]);
