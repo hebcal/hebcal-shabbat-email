@@ -1,4 +1,4 @@
-/* eslint-disable require-jsdoc */
+/* eslint-disable n/no-process-exit */
 import fs from 'fs';
 import ini from 'ini';
 import pino from 'pino';

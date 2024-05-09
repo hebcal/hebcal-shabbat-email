@@ -1,4 +1,4 @@
-/* eslint-disable require-jsdoc */
+/* eslint-disable n/no-process-exit */
 import fs from 'fs';
 import ini from 'ini';
 import {makeDb, dirIfExistsOrCwd} from './makedb.js';
@@ -93,9 +93,8 @@ async function readBounceQueue(sqs, db) {
     logger.debug(`Processing ${response.Messages.length} bounce messages`);
     for (const message of response.Messages) {
       const body = JSON.parse(message.Body);
-      bounceLogStream.write(body.Message);
-      bounceLogStream.write('\n');
       const innerMsg = JSON.parse(body.Message);
+      innerMsg.hebcal = {timestamp: new Date().toISOString()};
       if (innerMsg.notificationType == 'Bounce') {
         const bounceType = innerMsg.bounce.bounceType;
         const recip = innerMsg.bounce.bouncedRecipients[0];
@@ -105,16 +104,21 @@ async function readBounceQueue(sqs, db) {
           stdReason = bounceType;
         }
         logger.info(`Bounce: ${emailAddress} ${stdReason}`);
+        innerMsg.hebcal.stdReason = stdReason;
         await db.query(sql, [emailAddress, stdReason, recip.diagnosticCode]);
       } else if (innerMsg.notificationType == 'Complaint') {
         const emailAddress = innerMsg.complaint.complainedRecipients[0].emailAddress;
         const stdReason = 'amzn_abuse';
         logger.info(`Complaint: ${emailAddress} ${stdReason}`);
+        innerMsg.hebcal.stdReason = stdReason;
         await db.query(sql, [emailAddress, stdReason, stdReason]);
       } else {
         logger.warn(`Ignoring unknown bounce message ${innerMsg.notificationType}`);
+        innerMsg.hebcal.ignored = true;
         console.log(innerMsg);
       }
+      bounceLogStream.write(JSON.stringify(innerMsg));
+      bounceLogStream.write('\n');
     }
     logger.debug(`Bounces: deleting ${response.Messages.length} messages`);
     await Promise.all(response.Messages.map((message) => {

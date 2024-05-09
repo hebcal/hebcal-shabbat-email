@@ -1,3 +1,4 @@
+/* eslint-disable n/no-process-exit */
 import dayjs from 'dayjs';
 import fs from 'fs';
 import ini from 'ini';
@@ -418,7 +419,6 @@ function getSpecialNote(cfg, isHTML) {
   const purimMonth = HDate.isLeapYear(yy) ? months.ADAR_II : months.ADAR_I;
   const gy = TODAY0.year();
 
-  // eslint-disable-next-line require-jsdoc
   function makeUrl(holiday) {
     const il = cfg.location.getIsrael();
     return isHTML ?
@@ -569,7 +569,7 @@ function loadSentLog(sentLogFilename) {
   try {
     lines = fs.readFileSync(sentLogFilename, 'utf-8').split('\n');
   } catch (error) {
-    logger.info(`No ${sentLogFilename} logfile from prior run`);
+    logger.info(`No ${sentLogFilename} logfile from prior run: ${error}`);
     return result; // no previous run to scan
   }
   for (const line of lines) {
@@ -639,7 +639,6 @@ function parseAllConfigs(subs) {
   }
 }
 
-// eslint-disable-next-line require-jsdoc
 function usage() {
   const PROG = 'shabbat_weekly.js';
   const usage = `Usage:

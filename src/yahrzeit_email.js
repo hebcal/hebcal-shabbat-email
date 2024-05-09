@@ -1,3 +1,4 @@
+/* eslint-disable n/no-process-exit */
 import dayjs from 'dayjs';
 import fs from 'fs';
 import ini from 'ini';
@@ -192,7 +193,6 @@ async function loadSubsFromDb(rows) {
   return toSend;
 }
 
-// eslint-disable-next-line require-jsdoc
 function makeSubInfo(contents, num, info0, hyear, sent, maxDays) {
   const id = contents.id;
   const idNum = `${id}.${num}`;
@@ -556,7 +556,6 @@ function getDateForId(query, id) {
   return {yy, mm, dd};
 }
 
-// eslint-disable-next-line require-jsdoc
 function usage() {
   const PROG = 'yahrzeit_email.js';
   const usage = `Usage:

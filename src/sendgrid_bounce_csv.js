@@ -1,4 +1,3 @@
-/* eslint-disable require-jsdoc */
 import fs from 'fs';
 import ini from 'ini';
 import {parse} from 'csv-parse';
@@ -24,6 +23,7 @@ main()
     })
     .catch((err) => {
       logger.fatal(err);
+      // eslint-disable-next-line n/no-process-exit
       process.exit(1);
     });
 
