@@ -10,19 +10,22 @@ import fs from 'fs';
  */
 export function makeDb(logger, iniConfig) {
   const host = iniConfig['hebcal.mysql.host'];
+  const port = +(iniConfig['hebcal.mysql.port']) || 3306;
   const user = iniConfig['hebcal.mysql.user'];
   const password = iniConfig['hebcal.mysql.password'];
   const database = iniConfig['hebcal.mysql.dbname'];
-  logger.info(`Connecting to mysql://${user}@${host}/${database}`);
+  const connURL = `mysql://${user}@${host}:${port}/${database}`;
+  logger.info(`Connecting to ${connURL}`);
   const connection = mysql.createConnection({
     host,
+    port,
     user,
     password,
     database,
   });
   connection.connect(function(err) {
     if (err) {
-      logger.fatal(err);
+      logger.fatal(err, `Cannot connect to ${connURL}`);
       throw err;
     }
     logger.debug('connected as id ' + connection.threadId);
