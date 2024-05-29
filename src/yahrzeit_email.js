@@ -213,7 +213,7 @@ function makeSubInfo(contents, num, info0, hyear, sent, maxDays) {
   }, info0);
   computeAnniversary(info);
   const diff = info.diff;
-  if (info.observed && diff >= 0 && diff <= maxDays) {
+  if (info.observed && diff >= 0 && diff < maxDays) {
     return info;
   } else if (!info.observed) {
     logger.debug(`No anniversary for ${info.anniversaryId}`);
