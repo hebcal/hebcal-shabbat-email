@@ -123,7 +123,8 @@ AND e.calendar_id = y.id`;
   }
   logger.info(`Loaded ${rows.length} active subscriptions from DB`);
 
-  const toSend = await loadSubsFromDb(rows);
+  const optout = await loadOptOut();
+  const toSend = await loadSubsFromDb(rows, optout);
 
   logger.debug(`Processing ${toSend.length} messages`);
   for (const info of toSend) {
@@ -138,13 +139,12 @@ AND e.calendar_id = y.id`;
  * @param {any[]} rows
  * @return {Promise<any[]>}
  */
-async function loadSubsFromDb(rows) {
+async function loadSubsFromDb(rows, optout) {
   const htoday = new HDate(today.toDate());
   const hyears = [htoday.getFullYear()];
   if (htoday.getMonth() === months.ELUL) {
     hyears.push(hyears[0] + 1);
   }
-  const optout = await loadOptOut();
   const sent7 = await loadRecentSent('yahrzeit_sent7');
   const sent1 = await loadRecentSent('yahrzeit_sent1');
 
@@ -161,21 +161,12 @@ async function loadSubsFromDb(rows) {
     const maxId = getMaxYahrzeitId(contents);
     logger.trace(`${id} ${contents.emailAddress} ${maxId}`);
     for (let num = 1; num <= maxId; num++) {
-      const info0 = await getYahrzeitDetailForId(contents, num);
+      const info0 = getYahrzeitDetailForId(contents, num);
       if (info0 === null) {
         logger.debug(`Skipping blank ${id}.${num}`);
         continue;
       }
-      let skip = false;
-      const idNum = `${id}.${num}`;
-      for (const key of [idNum, `${idNum}.${info0.hash}`]) {
-        if (optout[key]) {
-          logger.debug(`Skipping opt-out ${key}`);
-          skip = true;
-          break;
-        }
-      }
-      if (skip) {
+      if (skipOptOut(id, info0, optout)) {
         continue;
       }
       for (const hyear of hyears) {
@@ -191,6 +182,18 @@ async function loadSubsFromDb(rows) {
     }
   }
   return toSend;
+}
+
+function skipOptOut(subscriptionId, info, optout) {
+  const num = info.num;
+  const idNum = `${subscriptionId}.${num}`;
+  for (const key of [idNum, `${idNum}.${info.hash}`]) {
+    if (optout[key]) {
+      logger.debug(`Skipping opt-out ${key}`);
+      return true;
+    }
+  }
+  return false;
 }
 
 function makeSubInfo(contents, num, info0, hyear, sent, maxDays) {
@@ -500,23 +503,23 @@ function getAnniversaryType(str) {
 
 /**
  * @param {Object<string,string>} query
- * @param {number} id
- * @return {Promise<any>}
+ * @param {number} num
+ * @return {any}
  */
-async function getYahrzeitDetailForId(query, id) {
-  const {yy, mm, dd} = getDateForId(query, id);
+function getYahrzeitDetailForId(query, num) {
+  const {yy, mm, dd} = getDateForId(query, num);
   if (empty(dd) || empty(mm) || empty(yy)) {
     return null;
   }
-  const type = getAnniversaryType(query['t' + id]);
-  const sunset = query[`s${id}`];
-  const name = getAnniversaryName(query, id, type);
+  const type = getAnniversaryType(query['t' + num]);
+  const sunset = query[`s${num}`];
+  const name = getAnniversaryName(query, num, type);
   let day = dayjs(new Date(yy, mm - 1, dd));
   if (sunset === 'on' || sunset == 1) {
     day = day.add(1, 'day');
   }
   const hash = murmur32HexSync([day.format('YYYY-MM-DD'), type].join('-'));
-  return {num: id, dd, mm, yy, sunset, type, name, day, hash};
+  return {num, dd, mm, yy, sunset, type, name, day, hash};
 }
 
 /**
