@@ -1,13 +1,16 @@
 import fs from 'fs';
 import mysql from 'mysql2/promise';
-import { Logger } from 'pino';
+import {Logger} from 'pino';
 
 /**
  * Wraps a MySQL connection in promises
  */
-export async function makeDb(logger: Logger, iniConfig: { [s: string]: string; }): Promise<mysql.Connection> {
+export async function makeDb(
+  logger: Logger,
+  iniConfig: {[s: string]: string}
+): Promise<mysql.Connection> {
   const host = iniConfig['hebcal.mysql.host'];
-  const port = +(iniConfig['hebcal.mysql.port']) || 3306;
+  const port = +iniConfig['hebcal.mysql.port'] || 3306;
   const user = iniConfig['hebcal.mysql.user'];
   const password = iniConfig['hebcal.mysql.password'];
   const database = iniConfig['hebcal.mysql.dbname'];
@@ -35,7 +38,7 @@ export async function makeDb(logger: Logger, iniConfig: { [s: string]: string; }
  */
 export async function dirIfExistsOrCwd(dir: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    fs.stat(dir, function(err, stats) {
+    fs.stat(dir, (err, stats) => {
       if (err) {
         return resolve('.');
       }
