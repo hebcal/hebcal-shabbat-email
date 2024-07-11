@@ -24,6 +24,7 @@ import {
 import {IcalEvent} from '@hebcal/icalendar';
 import {murmur32HexSync} from 'murmurhash3';
 import {htmlToText} from 'nodemailer-html-to-text';
+import {RowDataPacket} from 'mysql2';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose', 'localhost'],
@@ -145,9 +146,9 @@ AND e.calendar_id = y.id`;
 
 type SubBase = {
   num: number;
-  dd: any;
-  mm: any;
-  yy: any;
+  dd: string;
+  mm: string;
+  yy: string;
   sunset: string | number;
   type: string;
   name: string;
@@ -156,12 +157,12 @@ type SubBase = {
 };
 
 type SubInfo = SubBase & {
-  id: any;
+  id: string;
   anniversaryId: string;
-  hyear: any;
-  calendarId: any;
-  emailAddress: any;
-  reminderDays: any;
+  hyear: number;
+  calendarId: string;
+  emailAddress: string;
+  reminderDays: number;
   observed?: Dayjs | boolean;
   hd?: HDate;
   diff?: number;
@@ -172,7 +173,7 @@ type RawYahrzeitContents = {
 };
 
 async function loadSubsFromDb(
-  rows: any[],
+  rows: RowDataPacket[],
   optout: StringDateMap
 ): Promise<SubInfo[]> {
   const htoday = new HDate(today.toDate());
@@ -236,7 +237,7 @@ function skipOptOut(
 }
 
 function makeSubInfo(
-  contents: any,
+  contents: RawYahrzeitContents,
   num: number,
   info0: SubBase,
   hyear: number,
@@ -252,17 +253,15 @@ function makeSubInfo(
       return false;
     }
   }
-  const info: SubInfo = Object.assign(
-    {
-      id: id,
-      anniversaryId: `${id}.${hyear}.${info0.hash}.${num}`,
-      hyear: hyear,
-      calendarId: contents.calendarId,
-      emailAddress: contents.emailAddress,
-      reminderDays: maxDays,
-    },
-    info0
-  );
+  const info: SubInfo = {
+    id: id as string,
+    anniversaryId: `${id}.${hyear}.${info0.hash}.${num}`,
+    hyear: hyear,
+    calendarId: contents.calendarId as string,
+    emailAddress: contents.emailAddress as string,
+    reminderDays: maxDays,
+    ...info0,
+  };
   computeAnniversary(info);
   const diff = info.diff!;
   if (info.observed && diff >= 0 && diff < maxDays) {
@@ -282,8 +281,7 @@ async function loadOptOut(): Promise<StringDateMap> {
   const rows = await db.query(sql);
   logger.info(`Loaded ${rows.length} opt_out from DB`);
   const optout: StringDateMap = {};
-  for (const row0 of rows) {
-    const row = row0 as any;
+  for (const row of rows) {
     const key0 = `${row.email_id}.${row.num}`;
     const key = row.name_hash === null ? key0 : key0 + '.' + row.name_hash;
     optout[key] = row.updated;
@@ -299,8 +297,7 @@ WHERE datediff(NOW(), sent_date) < 365`;
   const rows = await db.query(sql);
   logger.info(`Loaded ${rows.length} recently sent from ${tableName}`);
   const sent: StringDateMap = {};
-  for (const row0 of rows) {
-    const row = row0 as any;
+  for (const row of rows) {
     const key0 = `${row.yahrzeit_id}.${row.num}.${row.hyear}`;
     const key = row.name_hash === null ? key0 : key0 + '.' + row.name_hash;
     sent[key] = row.sent_date;
@@ -555,7 +552,7 @@ function getYahrzeitDetailForId(
   const type = getAnniversaryType(query['t' + num] as string);
   const sunset: string | number = query[`s${num}`];
   const name = getAnniversaryName(query, num, type);
-  let day = dayjs(new Date(yy, mm - 1, dd));
+  let day = dayjs(new Date(+yy, +mm - 1, +dd));
   if (sunset === 'on' || sunset === '1' || sunset === 1) {
     day = day.add(1, 'day');
   }
@@ -577,19 +574,25 @@ function getAnniversaryName(
   return prefix + id;
 }
 
-function getDateForId(query: RawYahrzeitContents, id: number): any {
+type YearMonthDay = {
+  yy: string;
+  mm: string;
+  dd: string;
+};
+
+function getDateForId(query: RawYahrzeitContents, id: number): YearMonthDay {
   const date = query['x' + id];
   if (typeof date === 'string' && date.length === 10) {
     const yy = date.substring(0, 4);
     const gm = date.substring(5, 7);
-    const mm = gm[0] === '0' ? gm[1] : gm;
+    const mm = gm.startsWith('0') ? gm[1] : gm;
     const gd = date.substring(8, 10);
-    const dd = gd[0] === '0' ? gd[1] : gd;
+    const dd = gd.startsWith('0') ? gd[1] : gd;
     return {yy, mm, dd};
   }
-  const yy = query['y' + id];
-  const mm = query['m' + id];
-  const dd = query['d' + id];
+  const yy = query['y' + id] as string;
+  const mm = query['m' + id] as string;
+  const dd = query['d' + id] as string;
   return {yy, mm, dd};
 }
 
