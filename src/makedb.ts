@@ -1,14 +1,11 @@
-import util from 'util';
-import mysql from 'mysql2';
 import fs from 'fs';
+import mysql from 'mysql2/promise';
+import { Logger } from 'pino';
 
 /**
  * Wraps a MySQL connection in promises
- * @param {any} logger
- * @param {Object<string,string>} iniConfig
- * @return {Object}
  */
-export function makeDb(logger, iniConfig) {
+export async function makeDb(logger: Logger, iniConfig: { [s: string]: string; }): Promise<mysql.Connection> {
   const host = iniConfig['hebcal.mysql.host'];
   const port = +(iniConfig['hebcal.mysql.port']) || 3306;
   const user = iniConfig['hebcal.mysql.user'];
@@ -16,39 +13,27 @@ export function makeDb(logger, iniConfig) {
   const database = iniConfig['hebcal.mysql.dbname'];
   const connURL = `mysql://${user}@${host}:${port}/${database}`;
   logger.info(`Connecting to ${connURL}`);
-  const connection = mysql.createConnection({
+  const connection = await mysql.createConnection({
     host,
     port,
     user,
     password,
     database,
   });
-  connection.connect(function(err) {
-    if (err) {
-      logger.fatal(err, `Cannot connect to ${connURL}`);
-      throw err;
-    }
-    logger.debug('connected as id ' + connection.threadId);
-  });
-  const connQuery = util.promisify(connection.query);
-  const connEnd = util.promisify(connection.end);
-  return {
-    query(sql, args) {
-      return connQuery.call(connection, sql, args);
-    },
-    close() {
-      return connEnd.call(connection);
-    },
-  };
+  try {
+    await connection.connect();
+  } catch (err) {
+    logger.fatal(err, `Cannot connect to ${connURL}`);
+    throw err;
+  }
+  logger.debug('connected as id ' + connection.threadId);
+  return connection;
 }
 
 /**
  * Returns directory name if it exists, else '.' for current working directory
- * @async
- * @param {string} dir
- * @return {Promise<string>}
  */
-export async function dirIfExistsOrCwd(dir) {
+export async function dirIfExistsOrCwd(dir: string): Promise<string> {
   return new Promise((resolve, reject) => {
     fs.stat(dir, function(err, stats) {
       if (err) {

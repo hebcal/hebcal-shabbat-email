@@ -3,7 +3,7 @@ import minimist from 'minimist';
 import pino from 'pino';
 import fs from 'fs';
 import ini from 'ini';
-import {makeDb} from './makedb.js';
+import {makeDb} from './makedb';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['dryrun', 'quiet', 'force', 'verbose'],
@@ -31,7 +31,7 @@ async function main() {
 }
 
 async function loadSubs(iniConfig) {
-  const db = makeDb(logger, iniConfig);
+  const db = await makeDb(logger, iniConfig);
   const sql = `select calendar_id from
   (select calendar_id, count(distinct(id)) num_subs, count(distinct(email_addr)) num_emails
    from yahrzeit_email where sub_status = 'active' group by 1 order by 2 desc) a
@@ -62,5 +62,5 @@ async function loadSubs(iniConfig) {
     logger.info(sql4);
     await db.query(sql4);
   }
-  await db.close();
+  await db.end();
 }

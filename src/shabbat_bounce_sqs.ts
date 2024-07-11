@@ -1,11 +1,16 @@
 /* eslint-disable n/no-process-exit */
+import {
+  DeleteMessageCommand,
+  ReceiveMessageCommand,
+  SQSClient,
+} from '@aws-sdk/client-sqs';
 import fs from 'fs';
 import ini from 'ini';
-import {makeDb, dirIfExistsOrCwd} from './makedb.js';
-import {makeTransporter, translateSmtpStatus} from './common.js';
-import pino from 'pino';
 import minimist from 'minimist';
-import {SQSClient, ReceiveMessageCommand, DeleteMessageCommand} from '@aws-sdk/client-sqs';
+import mysql from 'mysql2/promise';
+import pino from 'pino';
+import {getLogLevel, makeTransporter, translateSmtpStatus} from './common';
+import {dirIfExistsOrCwd, makeDb} from './makedb';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['quiet', 'verbose'],
@@ -13,12 +18,12 @@ const argv = minimist(process.argv.slice(2), {
 });
 
 const logger = pino({
-  level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
+  level: getLogLevel(argv),
 });
 const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 
-let logdir;
+let logdir: string;
 
 const sqs = new SQSClient({
   region: 'us-east-1',
@@ -31,29 +36,27 @@ const sqs = new SQSClient({
 const transporter = makeTransporter(config);
 
 main()
-    .then(() => {
-      logger.info('Success!');
-    })
-    .catch((err) => {
-      logger.fatal(err);
-      process.exit(1);
-    });
+  .then(() => {
+    logger.info('Success!');
+  })
+  .catch(err => {
+    logger.fatal(err);
+    process.exit(1);
+  });
 
-/**
- * @param {Object} bounce
- * @return {string}
- */
-function getStdReason(bounce) {
-  if (bounce.bounceSubType && bounce.bounceSubType == 'MailboxFull') {
+function getStdReason(bounce: any): string {
+  if (bounce.bounceSubType && bounce.bounceSubType === 'MailboxFull') {
     return 'over_quota';
   }
   const bouncedRecipient = bounce.bouncedRecipients[0];
   const diagnostic = bouncedRecipient.diagnosticCode;
   if (diagnostic) {
     const matches = diagnostic.match(/\s(5\.\d+\.\d+)\s/);
-    if (matches && matches.length && matches[1]) {
+    if (matches?.length && matches[1]) {
       return translateSmtpStatus(matches[1]);
-    } else if (diagnostic.startsWith('Amazon SES has suppressed sending to this address')) {
+    } else if (
+      diagnostic.startsWith('Amazon SES has suppressed sending to this address')
+    ) {
       return 'user_disabled';
     }
   }
@@ -63,12 +66,9 @@ function getStdReason(bounce) {
   return 'unknown';
 }
 
-/**
- * @param {SQSClient} sqs
- * @param {*} db
- */
-async function readBounceQueue(sqs, db) {
-  const bounceLogFilename = logdir + '/bounce-' + new Date().toISOString().substring(0, 7) + '.log';
+async function readBounceQueue(sqs: SQSClient, db: mysql.Connection) {
+  const bounceLogFilename =
+    logdir + '/bounce-' + new Date().toISOString().substring(0, 7) + '.log';
   const bounceLogStream = fs.createWriteStream(bounceLogFilename, {flags: 'a'});
   const queueURL = config['hebcal.aws.sns.email-bounce.url'];
   logger.info(`Bounces: fetching from ${queueURL}`);
@@ -77,13 +77,15 @@ async function readBounceQueue(sqs, db) {
     MaxNumberOfMessages: 10,
     WaitTimeSeconds: 5,
   };
-  const sql = 'INSERT INTO hebcal_shabbat_bounce (email_address,std_reason,full_reason,deactivated) VALUES (?,?,?,0)';
+  const sql =
+    'INSERT INTO hebcal_shabbat_bounce (email_address,std_reason,full_reason,deactivated) VALUES (?,?,?,0)';
+  // eslint-disable-next-line no-constant-condition
   while (true) {
-    logger.debug(`Bounces: polling for a batch`);
+    logger.debug('Bounces: polling for a batch');
     const command = new ReceiveMessageCommand(params);
     const response = await sqs.send(command);
     if (!response.Messages || !response.Messages.length) {
-      logger.info(`Bounces: done`);
+      logger.info('Bounces: done');
       return new Promise((resolve, reject) => {
         bounceLogStream.on('finish', () => resolve(true));
         bounceLogStream.on('error', reject);
@@ -92,28 +94,35 @@ async function readBounceQueue(sqs, db) {
     }
     logger.debug(`Processing ${response.Messages.length} bounce messages`);
     for (const message of response.Messages) {
+      if (!message.Body) {
+        logger.warn(`Skipping ${message.MessageId} with no body`);
+        continue;
+      }
       const body = JSON.parse(message.Body);
       const innerMsg = JSON.parse(body.Message);
       innerMsg.hebcal = {timestamp: new Date().toISOString()};
-      if (innerMsg.notificationType == 'Bounce') {
+      if (innerMsg.notificationType === 'Bounce') {
         const bounceType = innerMsg.bounce.bounceType;
         const recip = innerMsg.bounce.bouncedRecipients[0];
         const emailAddress = recip.emailAddress;
         let stdReason = getStdReason(innerMsg.bounce);
-        if (stdReason == 'unknown' && bounceType == 'Transient') {
+        if (stdReason === 'unknown' && bounceType === 'Transient') {
           stdReason = bounceType;
         }
         logger.info(`Bounce: ${emailAddress} ${stdReason}`);
         innerMsg.hebcal.stdReason = stdReason;
         await db.query(sql, [emailAddress, stdReason, recip.diagnosticCode]);
-      } else if (innerMsg.notificationType == 'Complaint') {
-        const emailAddress = innerMsg.complaint.complainedRecipients[0].emailAddress;
+      } else if (innerMsg.notificationType === 'Complaint') {
+        const emailAddress =
+          innerMsg.complaint.complainedRecipients[0].emailAddress;
         const stdReason = 'amzn_abuse';
         logger.info(`Complaint: ${emailAddress} ${stdReason}`);
         innerMsg.hebcal.stdReason = stdReason;
         await db.query(sql, [emailAddress, stdReason, stdReason]);
       } else {
-        logger.warn(`Ignoring unknown bounce message ${innerMsg.notificationType}`);
+        logger.warn(
+          `Ignoring unknown bounce message ${innerMsg.notificationType}`
+        );
         innerMsg.hebcal.ignored = true;
         console.log(innerMsg);
       }
@@ -121,22 +130,20 @@ async function readBounceQueue(sqs, db) {
       bounceLogStream.write('\n');
     }
     logger.debug(`Bounces: deleting ${response.Messages.length} messages`);
-    await Promise.all(response.Messages.map((message) => {
-      const params = {
-        QueueUrl: queueURL,
-        ReceiptHandle: message.ReceiptHandle,
-      };
-      const command = new DeleteMessageCommand(params);
-      return sqs.send(command);
-    }));
+    await Promise.all(
+      response.Messages.map(message => {
+        const params = {
+          QueueUrl: queueURL,
+          ReceiptHandle: message.ReceiptHandle,
+        };
+        const command = new DeleteMessageCommand(params);
+        return sqs.send(command);
+      })
+    );
   }
 }
 
-/**
- * @param {SQSClient} sqs
- * @param {*} db
- */
-async function readUnsubQueue(sqs, db) {
+async function readUnsubQueue(sqs: SQSClient, db: mysql.Connection) {
   const subsLogFilename = logdir + '/subscribers.log';
   const subsLogStream = fs.createWriteStream(subsLogFilename, {flags: 'a'});
   const queueURL = config['hebcal.aws.sns.email-unsub.url'];
@@ -146,12 +153,13 @@ async function readUnsubQueue(sqs, db) {
     MaxNumberOfMessages: 10,
     WaitTimeSeconds: 5,
   };
+  // eslint-disable-next-line no-constant-condition
   while (true) {
-    logger.debug(`Unsubscribes: polling for a batch`);
+    logger.debug('Unsubscribes: polling for a batch');
     const command = new ReceiveMessageCommand(params);
     const response = await sqs.send(command);
     if (!response.Messages || !response.Messages.length) {
-      logger.info(`Unsubscribes: done`);
+      logger.info('Unsubscribes: done');
       return new Promise((resolve, reject) => {
         subsLogStream.on('finish', () => resolve(true));
         subsLogStream.on('error', reject);
@@ -160,12 +168,18 @@ async function readUnsubQueue(sqs, db) {
     }
     logger.debug(`Processing ${response.Messages.length} unsubscribe messages`);
     for (const message of response.Messages) {
+      if (!message.Body) {
+        logger.warn(`Skipping ${message.MessageId} with no body`);
+        continue;
+      }
       const body = JSON.parse(message.Body);
       const innerMsg = JSON.parse(body.Message);
-      if (innerMsg.notificationType == 'Received') {
+      if (innerMsg.notificationType === 'Received') {
         let source = innerMsg.mail.source;
         const destination = innerMsg.mail.destination[0];
-        const matches0 = destination && destination.match(/^shabbat-unsubscribe\+(\w+)@hebcal.com$/);
+        const matches0 =
+          destination &&
+          destination.match(/^shabbat-unsubscribe\+(\w+)@hebcal.com$/);
         const emailId = matches0 && matches0.length && matches0[1];
         const commonHeaders = innerMsg.mail.commonHeaders;
         if (commonHeaders && commonHeaders.from && commonHeaders.from[0]) {
@@ -176,40 +190,60 @@ async function readUnsubQueue(sqs, db) {
           }
         }
         logger.info(`Unsubscribe from=${source} emailId=${emailId}`);
-        await unsubscribe(db, destination, source, emailId, innerMsg, subsLogStream);
+        await unsubscribe(
+          db,
+          destination,
+          source,
+          emailId,
+          innerMsg,
+          subsLogStream
+        );
       }
     }
     logger.info(`Unsubscribes: deleting ${response.Messages.length} messages`);
-    await Promise.all(response.Messages.map((message) => {
-      const params = {
-        QueueUrl: queueURL,
-        ReceiptHandle: message.ReceiptHandle,
-      };
-      const command = new DeleteMessageCommand(params);
-      return sqs.send(command);
-    }));
+    await Promise.all(
+      response.Messages.map(message => {
+        const params = {
+          QueueUrl: queueURL,
+          ReceiptHandle: message.ReceiptHandle,
+        };
+        const command = new DeleteMessageCommand(params);
+        return sqs.send(command);
+      })
+    );
   }
 }
 
-async function errorMail(emailAddress) {
+async function errorMail(emailAddress: string) {
   const message = {
     from: 'Hebcal <shabbat-owner@hebcal.com>',
     to: emailAddress,
     subject: 'Unable to process your message',
-    text: 'Sorry,\n\nWe are unable to process the message from <' + emailAddress + '>.\n\n' +
-    'The email address used to send your message is not subscribed to the Shabbat ' +
-    'candle lighting time list.\n\nRegards,\nhebcal.com\n\n',
+    text:
+      'Sorry,\n\nWe are unable to process the message from <' +
+      emailAddress +
+      '>.\n\n' +
+      'The email address used to send your message is not subscribed to the Shabbat ' +
+      'candle lighting time list.\n\nRegards,\nhebcal.com\n\n',
   };
   return transporter.sendMail(message);
 }
 
-async function unsubscribe(db, destination, emailAddress, emailId, innerMsg, logStream) {
+async function unsubscribe(
+  db: mysql.Connection,
+  destination: string,
+  emailAddress: string,
+  emailId: string,
+  innerMsg: any,
+  logStream: fs.WriteStream
+) {
   const t = Math.floor(new Date().getTime() / 1000);
-  const sql = 'SELECT email_status,email_id,email_address FROM hebcal_shabbat_email ' +
+  const sql =
+    'SELECT email_status,email_id,email_address FROM hebcal_shabbat_email ' +
     (emailId ? 'WHERE email_id = ?' : 'WHERE email_address = ?');
   logger.debug(sql);
   const rows = await db.query(sql, [emailId || emailAddress]);
-  const logMessage = {
+  const logMessage: any = {
     time: t,
     status: 0,
     from: emailAddress,
@@ -229,41 +263,43 @@ async function unsubscribe(db, destination, emailAddress, emailId, innerMsg, log
     };
   }
   if (!rows || !rows.length) {
-    logMessage.code='unsub_notfound';
+    logMessage.code = 'unsub_notfound';
     logStream.write(JSON.stringify(logMessage));
     logStream.write('\n');
     return errorMail(emailAddress);
   }
-  const row = rows[0];
+  const row = rows[0] as any;
   const origEmail = row.email_address;
   logMessage.from = origEmail;
-  if (row.email_status == 'unsubscribed') {
-    logMessage.code='unsub_twice';
+  if (row.email_status === 'unsubscribed') {
+    logMessage.code = 'unsub_twice';
     logStream.write(JSON.stringify(logMessage));
     logStream.write('\n');
     return errorMail(origEmail);
   }
   logMessage.status = 1;
-  logMessage.code='unsub';
+  logMessage.code = 'unsub';
   logStream.write(JSON.stringify(logMessage));
   logStream.write('\n');
-  const sql2 = 'UPDATE hebcal_shabbat_email SET email_status=\'unsubscribed\' WHERE email_id = ?';
+  const sql2 =
+    "UPDATE hebcal_shabbat_email SET email_status='unsubscribed' WHERE email_id = ?";
   logger.debug(sql2);
   await db.query(sql2, [row.email_id]);
   const message = {
     from: 'Hebcal <shabbat-owner@hebcal.com>',
     to: origEmail,
     subject: 'You have been unsubscribed from hebcal',
-    text: 'Hello,\n\nPer your request, you have been removed from the weekly ' +
-    `Shabbat candle lighting time list.\n\nRegards,\nhebcal.com\n\n[id:${row.email_id}]\n`,
+    text:
+      'Hello,\n\nPer your request, you have been removed from the weekly ' +
+      `Shabbat candle lighting time list.\n\nRegards,\nhebcal.com\n\n[id:${row.email_id}]\n`,
   };
   return transporter.sendMail(message);
 }
 
 async function main() {
-  const db = makeDb(logger, config);
+  const db = await makeDb(logger, config);
   logdir = await dirIfExistsOrCwd('/var/log/hebcal');
   await readUnsubQueue(sqs, db);
   await readBounceQueue(sqs, db);
-  return db.close();
+  return db.end();
 }

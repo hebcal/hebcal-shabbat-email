@@ -1,17 +1,17 @@
 /* eslint-disable n/no-process-exit */
+import { CalOptions, Event, flags, HDate, HebrewCalendar, Location, months } from '@hebcal/core';
+import { GeoDb } from '@hebcal/geo-sqlite';
+import { appendIsraelAndTracking } from '@hebcal/rest-api';
 import dayjs from 'dayjs';
 import fs from 'fs';
+import { flock } from 'fs-ext';
+import { htmlToText } from 'html-to-text';
 import ini from 'ini';
-import {flags, HDate, HebrewCalendar, months} from '@hebcal/core';
-import pino from 'pino';
-import {flock} from 'fs-ext';
 import minimist from 'minimist';
 import nodemailer from 'nodemailer';
-import {GeoDb} from '@hebcal/geo-sqlite';
-import {makeDb, dirIfExistsOrCwd} from './makedb.js';
-import {shouldSendEmailToday, makeTransporter, htmlToTextOptions, msleep} from './common.js';
-import {appendIsraelAndTracking} from '@hebcal/rest-api';
-import {htmlToText} from 'html-to-text';
+import pino from 'pino';
+import { getLogLevel, htmlToTextOptions, makeTransporter, msleep, shouldSendEmailToday } from './common';
+import { dirIfExistsOrCwd, makeDb } from './makedb';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose', 'localhost',
@@ -26,13 +26,7 @@ if (argv.help) {
 argv.sleeptime = typeof argv.sleeptime === 'undefined' ? 300 : +argv.sleeptime;
 
 const logger = pino({
-  level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
-/*
-  transport: {
-    target: 'pino-pretty',
-    options: {translateTime: 'SYS:standard', ignore: 'pid,hostname'},
-  },
-*/
+  level: getLogLevel(argv),
 });
 
 const TODAY0 = dayjs(argv.date); // undefined => new Date()
@@ -92,18 +86,13 @@ async function main() {
       }
       mainInner(subs, config, sentLogFilename).then(() => {
         fs.closeSync(lockfile);
-        resolve();
+        resolve(true);
       });
     });
   });
 }
 
-/**
- * @param {Map<string,any>} subs
- * @param {Object<string,any>} config
- * @param {string} sentLogFilename
- */
-async function mainInner(subs, config, sentLogFilename) {
+async function mainInner(subs: Map<string, any>, config: { [s: string]: any; }, sentLogFilename: string) {
   parseAllConfigs(subs);
 
   logger.info(`Sorting ${subs.size} users by lat/long`);
@@ -150,12 +139,22 @@ async function mainInner(subs, config, sentLogFilename) {
   logStream.end();
 }
 
-/**
- * @param {fs.WriteStream} logStream
- * @param {Object} cfg
- * @param {Object} info
- */
-function writeLogLine(logStream, cfg, info) {
+type CandleConfig = {
+  id: string;
+  email: string;
+  m: number;
+  M: boolean;
+  b: number;
+  ue: boolean;
+  zip?: string;
+  geonameid?: number;
+  legacyCity?: string;
+  location: Location;
+};
+
+const dummyLocation = new Location(0, 0, false, 'UTC');
+
+function writeLogLine(logStream: fs.WriteStream, cfg: CandleConfig, info: any) {
   const location = cfg.zip || cfg.geonameid || cfg.legacyCity;
   const mid = info.messageId.substring(1, info.messageId.indexOf('@'));
   const status = Number(info.response.startsWith('250'));
@@ -164,10 +163,8 @@ function writeLogLine(logStream, cfg, info) {
 
 /**
  * Gets start and end days for filtering relevant hebcal events
- * @param {Date} now
- * @return {dayjs.Dayjs[]}
  */
-function getStartAndEnd(now) {
+function getStartAndEnd(now: Date): dayjs.Dayjs[] {
   const midnight = dayjs(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
   const dow = midnight.day();
   const saturday = midnight.add(6 - dow, 'day');
@@ -178,13 +175,10 @@ function getStartAndEnd(now) {
 
 /**
  * mails the user
- * @param {nodemailer.Mail} transporter
- * @param {any} cfg
- * @return {Promise<Object>}
  */
-async function mailUser(transporter, cfg) {
+async function mailUser(transporter: nodemailer.Transporter | null, cfg: CandleConfig): Promise<any> {
   const message = getMessage(cfg);
-  if (argv.dryrun) {
+  if (!transporter) {
     return undefined;
   }
   return transporter.sendMail(message);
@@ -192,10 +186,8 @@ async function mailUser(transporter, cfg) {
 
 /**
  * creates a message object
- * @param {any} cfg
- * @return {any}
  */
-function getMessage(cfg) {
+function getMessage(cfg: CandleConfig): nodemailer.SendMailOptions {
   const [subj, body0, htmlBody0, specialNote, specialNoteTxt] = getSubjectAndBody(cfg);
 
   const encoded = encodeURIComponent(Buffer.from(cfg.email).toString('base64'));
@@ -214,7 +206,7 @@ ${unsubUrl}
 
   const msgid = cfg.id + '.' + Date.now();
   const openUrl = `https://www.hebcal.com/email/open?msgid=${msgid}` +
-    `&loc=` + encodeURIComponent(cityDescr) + UTM_CAMPAIGN;
+    `&loc=` + encodeURIComponent(cityDescr!) + UTM_CAMPAIGN;
   const urls = {
     home: urlEncodeAndTrack('https://www.hebcal.com/'),
     unsub: urlEncodeAndTrack(`${unsubUrl}&unsubscribe=1`),
@@ -268,25 +260,23 @@ ${imgOpen}
   return message;
 }
 
-let prevCfg;
-let prevSubjAndBody;
+let prevCfg: CandleConfig;
+let prevSubjAndBody: string[];
 
 /**
  * looks up or generates subject and body
- * @param {any} cfg
- * @return {string[]}
  */
-function getSubjectAndBody(cfg) {
+function getSubjectAndBody(cfg: CandleConfig): string[] {
   const location = cfg.location;
   if (prevCfg &&
       cfg.m === prevCfg.m &&
       cfg.M === prevCfg.M &&
       cfg.b === prevCfg.b &&
       cfg.ue === prevCfg.ue &&
-      location.geoid === prevCfg.location.geoid) {
+      location.getGeoId() === prevCfg.location.getGeoId()) {
     return prevSubjAndBody;
   }
-  const options = {
+  const options: CalOptions = {
     start: midnightDt,
     end: endOfWeekDt,
     location: location,
@@ -310,20 +300,14 @@ function getSubjectAndBody(cfg) {
 const BLANK = '<div>&nbsp;</div>';
 const ITEM_STYLE = 'padding-left:8px;margin-bottom:2px';
 
-/**
- * @param {Event[]} events
- * @param {HebrewCalendar.Options} options
- * @param {any} cfg
- * @return {string[]}
- */
-function genSubjectAndBody(events, options, cfg) {
+function genSubjectAndBody(events: Event[], options: CalOptions, cfg: CandleConfig): string[] {
   let body = '';
   let htmlBody = '';
   let firstCandles;
   let sedra;
   let prevStrtime;
   for (const ev of events) {
-    const timed = Boolean(ev.eventTime);
+    const timed = Boolean((ev as any).eventTime);
     const title = timed ? ev.renderBrief() : ev.render();
     const title1 = title.replace(/'/g, '’');
     const desc = ev.getDesc();
@@ -342,7 +326,8 @@ function genSubjectAndBody(events, options, cfg) {
     }
     const emoji = ev.getEmoji();
     if (timed) {
-      const hourMin = HebrewCalendar.reformatTimeStr(ev.eventTimeStr, 'pm', options);
+      const eventTimeStr: string = (ev as any).eventTimeStr;
+      const hourMin = HebrewCalendar.reformatTimeStr(eventTimeStr, 'pm', options);
       if (!firstCandles && desc === 'Candle lighting') {
         firstCandles = hourMin;
       }
@@ -354,11 +339,11 @@ function genSubjectAndBody(events, options, cfg) {
       sedra = title.substring(title.indexOf(' ') + 1);
       body += `  Torah portion: ${title}\n`;
       const url = ev.url();
-      const url2 = urlEncodeAndTrack(url, options.il);
+      const url2 = urlEncodeAndTrack(url!, options.il);
       htmlBody += `<div style="${ITEM_STYLE}">Torah portion: <a href="${url2}">${title1}</a></div>\n`;
     } else {
       const dow = dt.day();
-      if (dow === 6 && !sedra && (mask & flags.CHAG || ev.cholHaMoedDay)) {
+      if (dow === 6 && !sedra && (mask & flags.CHAG || (ev as any).cholHaMoedDay)) {
         sedra = ev.basename();
       }
       body += `  ${title}\n`;
@@ -388,30 +373,17 @@ function genSubjectAndBody(events, options, cfg) {
 
 const UTM_CAMPAIGN = '&utm_campaign=shabbat-weekly';
 
-/**
- * @param {string} url
- * @param {boolean} il
- * @return {string}
- */
-function urlEncodeAndTrack(url, il) {
+function urlEncodeAndTrack(url: string, il?: boolean): string {
+  il = Boolean(il);
   url = appendIsraelAndTracking(url, il, 'newsletter', 'email', 'shabbat-weekly');
   return url.replace(/&/g, '&amp;');
 }
 
-/**
- * @param {string} s
- * @return {string}
- */
-function nowrap(s) {
+function nowrap(s: string): string {
   return `<span style="white-space: nowrap">${s}</span>`;
 }
 
-/**
- * @param {any} cfg
- * @param {boolean} isHTML
- * @return {string}
- */
-function getSpecialNote(cfg, isHTML) {
+function getSpecialNote(cfg: CandleConfig, isHTML: boolean): string {
   const hd = new HDate(TODAY);
   const mm = hd.getMonth();
   const dd = hd.getDate();
@@ -419,7 +391,7 @@ function getSpecialNote(cfg, isHTML) {
   const purimMonth = HDate.isLeapYear(yy) ? months.ADAR_II : months.ADAR_I;
   const gy = TODAY0.year();
 
-  function makeUrl(holiday) {
+  function makeUrl(holiday: string) {
     const il = cfg.location.getIsrael();
     return isHTML ?
       urlEncodeAndTrack(`https://www.hebcal.com/holidays/${holiday}-${gy}`, il) :
@@ -495,14 +467,10 @@ ${when} on ${strtime}.`;
     note + `\n</div>\n${BLANK}\n`;
 }
 
-/**
- * @param {Map<string,any>} config
- * @param {string[]} addrs
- * @return {Promise<Map<string,any>>}
- */
-async function loadSubs(config, addrs) {
-  const db = makeDb(logger, config);
-  const allSql = addrs && addrs.length ?
+async function loadSubs(config: { [s: string]: string; },
+   addrs: string[]): Promise<Map<string, CandleConfig>> {
+  const db = await makeDb(logger, config);
+  const allSql = addrs?.length ?
     'AND email_address IN (\'' + addrs.join('\',\'') + '\')' :
     '';
   const sql = `SELECT email_address,
@@ -514,36 +482,33 @@ async function loadSubs(config, addrs) {
        email_candles_havdalah,
        email_havdalah_tzeit,
        email_sundown_candles
-FROM hebcal_shabbat_email
+FROM 
 WHERE email_status = 'active'
-AND email_ip IS NOT NULL
+AND email_ip IS NOT NULLhebcal_shabbat_email
 ${allSql}`;
   logger.info(sql);
   const results = await db.query(sql);
-  const subs = new Map();
+  const subs = new Map<string, CandleConfig>();
   for (const row of results) {
     const cfg = makeCandlesCfg(row);
     if (cfg) {
       subs.set(cfg.email, cfg);
     }
   }
-  await db.close();
+  await db.end();
   return subs;
 }
 
-/**
- * @param {*} row
- * @return {*}
- */
-function makeCandlesCfg(row) {
+function makeCandlesCfg(row: any): CandleConfig | null {
   const email = row.email_address;
-  const cfg = {
+  const cfg: CandleConfig = {
     id: row.email_id,
     email: email,
     m: row.email_candles_havdalah,
     M: Boolean(row.email_havdalah_tzeit),
     b: row.email_sundown_candles,
     ue: Boolean(row.email_use_elevation),
+    location: dummyLocation,
   };
   if (row.email_candles_zipcode) {
     cfg.zip = row.email_candles_zipcode;
@@ -560,11 +525,9 @@ function makeCandlesCfg(row) {
 
 /**
  * Reads the previous log and returns any successful email adresses to skip
- * @param {string} sentLogFilename
- * @return {Set<string>}
  */
-function loadSentLog(sentLogFilename) {
-  const result = new Set();
+function loadSentLog(sentLogFilename: string): Set<string> {
+  const result = new Set<string>();
   let lines;
   try {
     lines = fs.readFileSync(sentLogFilename, 'utf-8').split('\n');
@@ -583,15 +546,12 @@ function loadSentLog(sentLogFilename) {
 
 /**
  * Scans subs map and removes invalid entries
- * @param {string} to
- * @param {Object} cfg
- * @return {boolean}
  */
-function parseConfig(to, cfg) {
+function parseConfig(to: string, cfg: CandleConfig): boolean {
   const location = cfg.zip ? geoDb.lookupZip(cfg.zip) :
     cfg.legacyCity ? geoDb.lookupLegacyCity(cfg.legacyCity) :
     cfg.geonameid ? geoDb.lookupGeoname(cfg.geonameid) :
-    null;
+    undefined;
 
   if (!location) {
     logger.warn('Skipping bad config: ' + JSON.stringify(cfg));
@@ -610,9 +570,8 @@ function parseConfig(to, cfg) {
 
 /**
  * Scans subs map and removes invalid entries
- * @param {Map<string,any>} subs
  */
-function parseAllConfigs(subs) {
+function parseAllConfigs(subs: Map<string, CandleConfig>) {
   logger.info(`Parsing ${subs.size} configs`);
   const failures = [];
   for (const [to, cfg] of subs.entries()) {

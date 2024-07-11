@@ -3,11 +3,14 @@ import fs from 'fs';
 import ini from 'ini';
 import pino from 'pino';
 import minimist from 'minimist';
-import {makeDb, dirIfExistsOrCwd} from './makedb.js';
+import mysql from 'mysql2/promise';
+import {makeDb, dirIfExistsOrCwd} from './makedb';
+import {getLogLevel} from './common';
 
 const PROG = 'shabbat_deactivate.js';
 const COUNT_DEFAULT = 7;
-const REASONS_DEFAULT = 'amzn_abuse,user_unknown,user_disabled,domain_error,spam';
+const REASONS_DEFAULT =
+  'amzn_abuse,user_unknown,user_disabled,domain_error,spam';
 
 const argv = minimist(process.argv.slice(2));
 if (argv.help || argv.h) {
@@ -18,40 +21,34 @@ argv.reasons = argv.reasons || REASONS_DEFAULT;
 argv.count = argv.count || COUNT_DEFAULT;
 
 const logger = pino({
-  level: argv.quiet ? 'warn' : 'info',
-/*
-  transport: {
-    target: 'pino-pretty',
-    options: {translateTime: 'SYS:standard', ignore: 'pid,hostname'},
-  },
-*/
+  level: getLogLevel(argv),
 });
 const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
-let logdir;
+let logdir: string;
 
-main(argv.sleeptime)
-    .then(() => {
-      logger.info('Success!');
-    })
-    .catch((err) => {
-      logger.fatal(err);
-      process.exit(1);
-    });
+main()
+  .then(() => {
+    logger.info('Success!');
+  })
+  .catch(err => {
+    logger.fatal(err);
+    process.exit(1);
+  });
 
 async function main() {
-  const db = makeDb(logger, config);
+  const db = await makeDb(logger, config);
   logdir = await dirIfExistsOrCwd('/var/log/hebcal');
   const addrs = await getCandidates(db);
   logger.info(`Deactivating ${addrs.length} subscriptions`);
   if (!argv.dryrun && addrs.length) {
     await deactivateSubs(db, addrs);
   }
-  return db.close();
+  return db.end();
 }
 
-async function deactivateSubs(db, addrs) {
-  const emails = addrs.join('\',\'');
+async function deactivateSubs(db: mysql.Connection, addrs: string[]) {
+  const emails = addrs.join("','");
   const sql1 = `UPDATE hebcal_shabbat_email
   SET email_status='bounce' WHERE email_address IN('${emails}')`;
   await db.query(sql1);
@@ -63,7 +60,7 @@ async function deactivateSubs(db, addrs) {
     const t = Math.floor(new Date().getTime() / 1000);
     try {
       const logStream = fs.createWriteStream(subsPath, {flags: 'a'});
-      addrs.forEach((addr) => {
+      addrs.forEach((addr: string) => {
         const logMessage = {
           time: t,
           status: 1,
@@ -81,9 +78,9 @@ async function deactivateSubs(db, addrs) {
   });
 }
 
-async function getCandidates(db) {
+async function getCandidates(db: mysql.Connection): Promise<string[]> {
   const reasons = argv.reasons.split(',');
-  const reasonsSql = reasons.join('\',\'');
+  const reasonsSql = reasons.join("','");
   const sql = `
 SELECT b.email_address,std_reason,count(1) as count
 FROM hebcal_shabbat_email e,
@@ -96,9 +93,10 @@ AND DATEDIFF(NOW(), b.timestamp) < 365
 GROUP by b.email_address,std_reason`;
   logger.info(sql);
   const results = await db.query(sql);
-  const addrs = [];
-  for (const row of results) {
-    if (row.count > argv.count || row.std_reason == 'amzn_abuse') {
+  const addrs: string[] = [];
+  for (const row0 of results) {
+    const row = row0 as any;
+    if (row.count > argv.count || row.std_reason === 'amzn_abuse') {
       if (!argv.quiet) {
         logger.info(`${row.email_address} (${row.count} bounces)`);
       }

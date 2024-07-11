@@ -1,13 +1,14 @@
 /* eslint-disable n/no-process-exit */
-import dayjs from 'dayjs';
+import dayjs, { Dayjs } from 'dayjs';
 import fs from 'fs';
 import ini from 'ini';
 import {Event, flags, HDate, HebrewCalendar, Locale, months} from '@hebcal/core';
 import pino from 'pino';
 import minimist from 'minimist';
 import nodemailer from 'nodemailer';
-import {makeDb} from './makedb.js';
-import {getChagOnDate, makeTransporter, htmlToTextOptions, msleep} from './common.js';
+import mysql from 'mysql2/promise';
+import {makeDb} from './makedb';
+import {getLogLevel, getChagOnDate, makeTransporter, htmlToTextOptions, msleep} from './common';
 import {IcalEvent} from '@hebcal/icalendar';
 import {murmur32HexSync} from 'murmurhash3';
 import {htmlToText} from 'nodemailer-html-to-text';
@@ -25,19 +26,12 @@ if (argv.help) {
 // allow sleeptime=0 for no sleep
 argv.sleeptime = typeof argv.sleeptime === 'undefined' ? 300 : +argv.sleeptime;
 
-const pinoOpts = {
-  level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
-};
-if (pinoOpts.level !== 'warn') {
-  pinoOpts.transport = {
-    target: 'pino-pretty',
-    options: {translateTime: 'SYS:standard', ignore: 'pid,hostname'},
-  };
-}
-const logger = pino(pinoOpts);
+const logger = pino({
+  level: getLogLevel(argv),
+});
 
-let transporter = null;
-let db = null;
+let transporter: nodemailer.Transporter;
+let db: mysql.Connection;
 
 const today = dayjs(argv.date); // undefined => new Date()
 logger.debug(`Today is ${today.format('dddd')}`);
@@ -72,10 +66,8 @@ main()
 
 /**
  * Sends the message via nodemailer, or no-op for dryrun
- * @param {Object} message
- * @return {Promise<any>}
  */
-async function sendMail(message) {
+async function sendMail(message: nodemailer.SendMailOptions): Promise<any> {
   if (argv.dryrun) {
     return {response: '250 OK', messageId: message.messageId, dryrun: true};
   } else {
@@ -90,6 +82,10 @@ async function sendMail(message) {
   }
 }
 
+type StringDateMap = {
+  [s: string]: Date;
+};
+
 /**
  * Main event loop
  */
@@ -98,7 +94,7 @@ async function main() {
   logger.debug(`Reading ${iniPath}...`);
   const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 
-  db = makeDb(logger, config);
+  db = await makeDb(logger, config);
   if (!argv.dryrun) {
     transporter = argv.localhost ?
       nodemailer.createTransport({host: 'localhost', port: 25}) :
@@ -118,12 +114,12 @@ AND e.calendar_id = y.id`;
   const rows = await db.query(sql);
   if (!rows || !rows.length) {
     logger.error('Got zero rows from DB!?');
-    db.close();
+    db.end();
     return;
   }
   logger.info(`Loaded ${rows.length} active subscriptions from DB`);
 
-  const optout = await loadOptOut();
+  const optout: StringDateMap = await loadOptOut();
   const toSend = await loadSubsFromDb(rows, optout);
 
   logger.debug(`Processing ${toSend.length} messages`);
@@ -132,14 +128,39 @@ AND e.calendar_id = y.id`;
     logger.debug(status);
   }
 
-  db.close();
+  db.end();
 }
 
-/**
- * @param {any[]} rows
- * @return {Promise<any[]>}
- */
-async function loadSubsFromDb(rows, optout) {
+type SubBase = {
+  num: number;
+  dd: any;
+  mm: any;
+  yy: any;
+  sunset: string | number;
+  type: string;
+  name: string;
+  day: dayjs.Dayjs;
+  hash: string;
+};
+
+type SubInfo = SubBase & {
+  id: any;
+  anniversaryId: string;
+  hyear: any;
+  calendarId: any;
+  emailAddress: any;
+  reminderDays: any;
+  observed?: Dayjs | boolean;
+  hd?: HDate;
+  diff?: number;
+};
+
+
+type RawYahrzeitContents = {
+  [s: string]: string | number;
+}
+
+async function loadSubsFromDb(rows: any[], optout: StringDateMap): Promise<SubInfo[]> {
   const htoday = new HDate(today.toDate());
   const hyears = [htoday.getFullYear()];
   if (htoday.getMonth() === months.ELUL) {
@@ -148,9 +169,9 @@ async function loadSubsFromDb(rows, optout) {
   const sent7 = await loadRecentSent('yahrzeit_sent7');
   const sent1 = await loadRecentSent('yahrzeit_sent1');
 
-  const toSend = [];
+  const toSend: SubInfo[] = [];
   for (const row of rows) {
-    const contents = row.contents;
+    const contents: RawYahrzeitContents = row.contents;
     const id = contents.id = row.id;
     if (optout[`${id}.0`]) {
       logger.debug(`Skipping global opt-out ${id}`);
@@ -184,7 +205,7 @@ async function loadSubsFromDb(rows, optout) {
   return toSend;
 }
 
-function skipOptOut(subscriptionId, info, optout) {
+function skipOptOut(subscriptionId: string, info: SubBase, optout: StringDateMap) {
   const num = info.num;
   const idNum = `${subscriptionId}.${num}`;
   for (const key of [idNum, `${idNum}.${info.hash}`]) {
@@ -196,7 +217,7 @@ function skipOptOut(subscriptionId, info, optout) {
   return false;
 }
 
-function makeSubInfo(contents, num, info0, hyear, sent, maxDays) {
+function makeSubInfo(contents: any, num: number, info0: SubBase, hyear: number, sent: StringDateMap, maxDays: number): SubInfo | false {
   const id = contents.id;
   const idNum = `${id}.${num}`;
   const prefix = `${idNum}.${hyear}`;
@@ -206,7 +227,7 @@ function makeSubInfo(contents, num, info0, hyear, sent, maxDays) {
       return false;
     }
   }
-  const info = Object.assign({
+  const info: SubInfo = Object.assign({
     id: id,
     anniversaryId: `${id}.${hyear}.${info0.hash}.${num}`,
     hyear: hyear,
@@ -215,7 +236,7 @@ function makeSubInfo(contents, num, info0, hyear, sent, maxDays) {
     reminderDays: maxDays,
   }, info0);
   computeAnniversary(info);
-  const diff = info.diff;
+  const diff = info.diff!;
   if (info.observed && diff >= 0 && diff < maxDays) {
     return info;
   } else if (!info.observed) {
@@ -226,16 +247,14 @@ function makeSubInfo(contents, num, info0, hyear, sent, maxDays) {
   return false;
 }
 
-/**
- * @return {Promise<Object<string,Date>>}
- */
-async function loadOptOut() {
+async function loadOptOut(): Promise<StringDateMap> {
   const sql = 'SELECT email_id, name_hash, num, updated FROM yahrzeit_optout WHERE deactivated = 1';
   logger.debug(sql);
   const rows = await db.query(sql);
   logger.info(`Loaded ${rows.length} opt_out from DB`);
-  const optout = {};
-  for (const row of rows) {
+  const optout: StringDateMap = {};
+  for (const row0 of rows) {
+    const row = row0 as any;
     const key0 = `${row.email_id}.${row.num}`;
     const key = row.name_hash == null ? key0 : key0 + '.' + row.name_hash;
     optout[key] = row.updated;
@@ -243,19 +262,16 @@ async function loadOptOut() {
   return optout;
 }
 
-/**
- * @param {string} tableName
- * @return {Promise<Object<string,Date>>}
- */
-async function loadRecentSent(tableName) {
+async function loadRecentSent(tableName: string): Promise<StringDateMap> {
   const sql = `SELECT yahrzeit_id, name_hash, num, hyear, sent_date
 FROM ${tableName}
 WHERE datediff(NOW(), sent_date) < 365`;
   logger.debug(sql);
   const rows = await db.query(sql);
   logger.info(`Loaded ${rows.length} recently sent from ${tableName}`);
-  const sent = {};
-  for (const row of rows) {
+  const sent: StringDateMap = {};
+  for (const row0 of rows) {
+    const row = row0 as any;
     const key0 = `${row.yahrzeit_id}.${row.num}.${row.hyear}`;
     const key = row.name_hash == null ? key0 : key0 + '.' + row.name_hash;
     sent[key] = row.sent_date;
@@ -263,10 +279,7 @@ WHERE datediff(NOW(), sent_date) < 365`;
   return sent;
 }
 
-/**
- * @param {Object<string,string>} info
- */
-function computeAnniversary(info) {
+function computeAnniversary(info: SubInfo) {
   const hyear = info.hyear;
   const origDt = info.day.toDate();
   const hd = (info.type === 'Yahrzeit') ?
@@ -281,10 +294,7 @@ function computeAnniversary(info) {
   }
 }
 
-/**
- * @param {Promise<Object<string,string>>} info
- */
-async function processAnniversary(info) {
+async function processAnniversary(info: SubInfo): Promise<any> {
   const message = makeMessage(info);
   let status;
   try {
@@ -308,17 +318,13 @@ async function processAnniversary(info) {
   return status;
 }
 
-/**
- * @param {any} info
- * @return {any}
- */
-function makeMessage(info) {
+function makeMessage(info: SubInfo): nodemailer.SendMailOptions {
   const type = info.type;
   const isYahrzeit = Boolean(type === 'Yahrzeit');
   const isOther = (type === 'Other');
   const UTM_PARAM = `utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=${type.toLowerCase()}-reminder`;
   const typeStr = isYahrzeit ? type : isOther ? 'Hebrew Anniversary' : `Hebrew ${type}`;
-  const observed = info.observed;
+  const observed = info.observed as Dayjs;
   const subject = makeSubject(typeStr, observed);
   logger.info(`${info.anniversaryId} - ${info.diff} days - ${subject}`);
   const verb = isYahrzeit ? 'remembering' : 'honoring';
@@ -329,7 +335,7 @@ function makeMessage(info) {
   const lightCandle = isYahrzeit ? ` It is customary to light a memorial candle ${when} on
 <time datetime="${erev.format('YYYY-MM-DD')}" ${DATE_STYLE}>${erev.format('dddd, MMMM D')}</time>
 as the Yahrzeit begins.` : '';
-  const hebdate = info.hd.render('en');
+  const hebdate = info.hd!.render('en');
   const origDt = info.day.toDate();
   const nth = calculateAnniversaryNth(origDt, info.hyear);
   const msgid = `${info.anniversaryId}.${new Date().getTime()}`;
@@ -341,7 +347,7 @@ as the Yahrzeit begins.` : '';
   // eslint-disable-next-line max-len
   const imgOpen = `<img src="https://www.hebcal.com/email/open?msgid=${msgid}&amp;loc=${type}&amp;${UTM_PARAM}" alt="" width="1" height="1" border="0" style="height:1px!important;width:1px!important;border-width:0!important;margin-top:0!important;margin-bottom:0!important;margin-right:0!important;margin-left:0!important;padding-top:0!important;padding-bottom:0!important;padding-right:0!important;padding-left:0!important">`;
   const prefix = isOther ? info.name : `Hebcal joins you in ${verb} ${info.name}, whose ${nth} ${typeStr}`;
-  const message = {
+  const message: nodemailer.SendMailOptions = {
     to: emailAddress,
     from: 'Hebcal <shabbat-owner@hebcal.com>',
     replyTo: 'no-reply@hebcal.com',
@@ -419,7 +425,7 @@ ${imgOpen}
  * @param {number} hyear
  * @return {string}
  */
-function calculateAnniversaryNth(origDt, hyear) {
+function calculateAnniversaryNth(origDt: Date, hyear: number): string {
   const origHd = new HDate(origDt);
   const origHyear = origHd.getFullYear();
   const numYears = hyear - origHyear;
@@ -427,12 +433,7 @@ function calculateAnniversaryNth(origDt, hyear) {
   return nth;
 }
 
-/**
- * @param {string} type
- * @param {dayjs.Dayjs} observed
- * @return {string}
- */
-function makeSubject(type, observed) {
+function makeSubject(type: string, observed: dayjs.Dayjs): string {
   const erev = observed.subtract(1, 'day');
   const erevMon = erev.format('MMMM');
   const erevDay = erev.format('D');
@@ -443,28 +444,16 @@ function makeSubject(type, observed) {
   return `${type} Observance for ${dateRange}`;
 }
 
-/**
- * @param {*} val
- * @return {boolean}
- */
-function empty(val) {
+function empty(val: any): boolean {
   return typeof val !== 'string' || val.length === 0;
 }
 
-/**
- * @param {string} k
- * @return {boolean}
- */
-function isNumKey(k) {
+function isNumKey(k: string): boolean {
   const code = k.charCodeAt(1);
   return code >= 48 && code <= 57;
 }
 
-/**
- * @param {Object<string,string>} query
- * @return {number}
- */
-function getMaxYahrzeitId(query) {
+function getMaxYahrzeitId(query: RawYahrzeitContents): number {
   let max = 0;
   for (const k of Object.keys(query)) {
     const k0 = k[0];
@@ -483,12 +472,7 @@ function getMaxYahrzeitId(query) {
   return max;
 }
 
-/**
- * @private
- * @param {string} str
- * @return {string}
- */
-function getAnniversaryType(str) {
+function getAnniversaryType(str: string): string {
   if (typeof str === 'string') {
     const s = str.toLowerCase();
     switch (s[0]) {
@@ -501,35 +485,25 @@ function getAnniversaryType(str) {
   return 'Yahrzeit';
 }
 
-/**
- * @param {Object<string,string>} query
- * @param {number} num
- * @return {any}
- */
-function getYahrzeitDetailForId(query, num) {
+function getYahrzeitDetailForId(query: RawYahrzeitContents, num: number): SubBase | null {
   const {yy, mm, dd} = getDateForId(query, num);
   if (empty(dd) || empty(mm) || empty(yy)) {
     return null;
   }
-  const type = getAnniversaryType(query['t' + num]);
-  const sunset = query[`s${num}`];
+  const type = getAnniversaryType(query['t' + num] as string);
+  const sunset: string | number = query[`s${num}`];
   const name = getAnniversaryName(query, num, type);
   let day = dayjs(new Date(yy, mm - 1, dd));
-  if (sunset === 'on' || sunset == 1) {
+  if (sunset === 'on' || sunset === '1' || sunset === 1) {
     day = day.add(1, 'day');
   }
   const hash = murmur32HexSync([day.format('YYYY-MM-DD'), type].join('-'));
   return {num, dd, mm, yy, sunset, type, name, day, hash};
 }
 
-/**
- * @param {Object<string,any>} query
- * @param {number} id
- * @param {string} type
- * @return {string}
- */
-function getAnniversaryName(query, id, type) {
-  const name0 = query[`n${id}`] && query[`n${id}`].trim();
+function getAnniversaryName(query: RawYahrzeitContents, id: number, type: string): string {
+  const str = query[`n${id}`];
+  const name0 = typeof str === 'string' ? str.trim() : undefined;
   if (name0) {
     return name0;
   }
@@ -537,13 +511,7 @@ function getAnniversaryName(query, id, type) {
   return prefix + id;
 }
 
-/**
- * @private
- * @param {Object<string,string>} query
- * @param {number} id
- * @return {any}
- */
-function getDateForId(query, id) {
+function getDateForId(query: RawYahrzeitContents, id: number): any {
   const date = query['x' + id];
   if (typeof date === 'string' && date.length === 10) {
     const yy = date.substring(0, 4);
@@ -560,7 +528,7 @@ function getDateForId(query, id) {
 }
 
 function usage() {
-  const PROG = 'yahrzeit_email.js';
+  const PROG = 'yahrzeit_email';
   const usage = `Usage:
     ${PROG} [options] [email_address...]
 

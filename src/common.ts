@@ -1,5 +1,13 @@
-import {flags, HDate, HebrewCalendar} from '@hebcal/core';
+import { Event, flags, HDate, HebrewCalendar } from '@hebcal/core';
+import { Dayjs } from 'dayjs';
+import minimist from 'minimist';
 import nodemailer from 'nodemailer';
+
+export function getLogLevel(argv: minimist.ParsedArgs): string {
+  if (argv.verbose) return 'debug';
+  if (argv.quiet) return 'warn';
+  return 'info';
+}
 
 export const htmlToTextOptions = {
   wordwrap: 74,
@@ -13,10 +21,8 @@ export const htmlToTextOptions = {
 
 /**
  * create reusable transporter object using the default SMTP transport
- * @param {Object<string,string>} iniConfig
- * @return {nodemailer.Mail}
  */
-export function makeTransporter(iniConfig) {
+export function makeTransporter(iniConfig: { [s: string]: string; }): nodemailer.Transporter {
   return nodemailer.createTransport({
     host: iniConfig['hebcal.email.shabbat.host'],
     port: 465,
@@ -31,11 +37,7 @@ export function makeTransporter(iniConfig) {
   });
 }
 
-/**
- * @param {dayjs.Dayjs} d
- * @return {Event}
- */
-export function getChagOnDate(d) {
+export function getChagOnDate(d: Dayjs): Event | undefined {
   const events = HebrewCalendar.getHolidaysOnDate(new HDate(d.toDate())) || [];
   const chag = events.find((ev) => ev.getFlags() & flags.CHAG);
   return chag;
@@ -43,10 +45,8 @@ export function getChagOnDate(d) {
 
 /**
  * Bails out if today is a holiday
- * @param {dayjs.Dayjs} today
- * @return {boolean}
  */
-export function shouldSendEmailToday(today) {
+export function shouldSendEmailToday(today: Dayjs): boolean {
   const chag = getChagOnDate(today);
   if (chag) {
     return false;
@@ -59,18 +59,14 @@ export function shouldSendEmailToday(today) {
       return Boolean(getChagOnDate(today.add(1, 'day')));
     case 2:
       // send email today (Tuesday) because Wed & Thurs are both yontiff
-      return (getChagOnDate(today.add(1, 'day')) && getChagOnDate(today.add(2, 'day')));
+      return Boolean(getChagOnDate(today.add(1, 'day')) && getChagOnDate(today.add(2, 'day')));
     default:
       // no email today - not Tue/Wed/Thu
       return false;
   }
 }
 
-/**
- * @param {string} smtpStatus
- * @return {string}
- */
-export function translateSmtpStatus(smtpStatus) {
+export function translateSmtpStatus(smtpStatus: string): string {
   switch (smtpStatus) {
     case '5.1.0':
     case '5.1.1':
@@ -103,8 +99,7 @@ export function translateSmtpStatus(smtpStatus) {
 
 /**
  * sleep for n miliseconds
- * @param {number} n
  */
-export function msleep(n) {
+export function msleep(n: number) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, n);
 }
