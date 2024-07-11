@@ -1,10 +1,10 @@
 import fs from 'fs';
 import ini from 'ini';
 import {parse} from 'csv-parse';
-import {makeDb} from './makedb';
+import {makeDb} from './makedb.js';
 import pino from 'pino';
 import minimist from 'minimist';
-import {translateSmtpStatus} from './common';
+import {translateSmtpStatus} from './common.js';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['quiet'],
@@ -35,7 +35,7 @@ async function main() {
   const filename = argv._[0];
   logger.info(`Reading ${filename}`);
   const records = await processFile(filename);
-  const db = await makeDb(logger, config);
+  const db = makeDb(logger, config);
   for (const r of records) {
     const emailAddress = r[2];
     const fullReason = r[1];
@@ -44,7 +44,7 @@ async function main() {
     logger.info(`Bounce: ${emailAddress} ${stdReason}`);
     await db.query(sql, [emailAddress, timestamp, stdReason, fullReason]);
   }
-  return db.end();
+  return db.close();
 }
 
 async function processFile(filename) {

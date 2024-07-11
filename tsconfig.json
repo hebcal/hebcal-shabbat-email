@@ -1,9 +1,16 @@
 {
   "extends": "./node_modules/gts/tsconfig-google.json",
   "compilerOptions": {
+    "module": "es6",
+    "declaration": false,
     "rootDir": "./src",
-    "outDir": "build",
+    "outDir": "dist",
     "esModuleInterop": true,
+    "target": "ES2022",
+    "sourceMap": false,
+    "lib": ["ESNext"],
+    "moduleResolution": "Node",
+    "strict": true,
     "paths": {
       "*": ["./types/*"]
     }

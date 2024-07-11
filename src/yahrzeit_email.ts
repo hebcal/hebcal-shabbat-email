@@ -13,15 +13,14 @@ import {
 import pino from 'pino';
 import minimist from 'minimist';
 import nodemailer from 'nodemailer';
-import mysql from 'mysql2/promise';
-import {makeDb} from './makedb';
+import {makeDb, MysqlDb} from './makedb.js';
 import {
   getLogLevel,
   getChagOnDate,
   makeTransporter,
   htmlToTextOptions,
   msleep,
-} from './common';
+} from './common.js';
 import {IcalEvent} from '@hebcal/icalendar';
 import {murmur32HexSync} from 'murmurhash3';
 import {htmlToText} from 'nodemailer-html-to-text';
@@ -44,7 +43,7 @@ const logger = pino({
 });
 
 let transporter: nodemailer.Transporter;
-let db: mysql.Connection;
+let db: MysqlDb;
 
 const today = dayjs(argv.date); // undefined => new Date()
 logger.debug(`Today is ${today.format('dddd')}`);
@@ -107,7 +106,7 @@ async function main() {
   logger.debug(`Reading ${iniPath}...`);
   const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 
-  db = await makeDb(logger, config);
+  db = makeDb(logger, config);
   if (!argv.dryrun) {
     transporter = argv.localhost
       ? nodemailer.createTransport({host: 'localhost', port: 25})
@@ -127,7 +126,7 @@ AND e.calendar_id = y.id`;
   const rows = await db.query(sql);
   if (!rows || !rows.length) {
     logger.error('Got zero rows from DB!?');
-    db.end();
+    db.close();
     return;
   }
   logger.info(`Loaded ${rows.length} active subscriptions from DB`);
@@ -141,7 +140,7 @@ AND e.calendar_id = y.id`;
     logger.debug(status);
   }
 
-  db.end();
+  db.close();
 }
 
 type SubBase = {
@@ -286,7 +285,7 @@ async function loadOptOut(): Promise<StringDateMap> {
   for (const row0 of rows) {
     const row = row0 as any;
     const key0 = `${row.email_id}.${row.num}`;
-    const key = row.name_hash == null ? key0 : key0 + '.' + row.name_hash;
+    const key = row.name_hash === null ? key0 : key0 + '.' + row.name_hash;
     optout[key] = row.updated;
   }
   return optout;
@@ -303,7 +302,7 @@ WHERE datediff(NOW(), sent_date) < 365`;
   for (const row0 of rows) {
     const row = row0 as any;
     const key0 = `${row.yahrzeit_id}.${row.num}.${row.hyear}`;
-    const key = row.name_hash == null ? key0 : key0 + '.' + row.name_hash;
+    const key = row.name_hash === null ? key0 : key0 + '.' + row.name_hash;
     sent[key] = row.sent_date;
   }
   return sent;

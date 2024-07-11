@@ -1,36 +1,75 @@
 import fs from 'fs';
-import mysql from 'mysql2/promise';
+import mysql, {
+  Connection,
+  ConnectionOptions,
+  QueryOptions,
+  RowDataPacket,
+} from 'mysql2';
 import {Logger} from 'pino';
 
 /**
  * Wraps a MySQL connection in promises
  */
-export async function makeDb(
+export class MysqlDb {
+  private connection: Connection;
+  constructor(logger: Logger, config: ConnectionOptions) {
+    const connURL = `mysql://${config.user}@${config.host}:${config.port}/${config.database}`;
+    logger.info(`Connecting to ${connURL}`);
+    const connection = mysql.createConnection(config);
+    connection.connect(err => {
+      if (err) {
+        logger.fatal(err, `Cannot connect to ${connURL}`);
+        throw err;
+      }
+      logger.debug('connected as id ' + connection.threadId);
+    });
+    this.connection = connection;
+  }
+  async query(sql: string, values?: any[]): Promise<RowDataPacket[]> {
+    return new Promise((resolve, reject) => {
+      const qopts: QueryOptions = {sql};
+      if (values) {
+        qopts.values = values;
+      }
+      this.connection.query<RowDataPacket[]>(qopts, (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      });
+    });
+  }
+  async close(): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      this.connection.end(err => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(true);
+        }
+      });
+    });
+  }
+}
+
+export function makeDb(
   logger: Logger,
   iniConfig: {[s: string]: string}
-): Promise<mysql.Connection> {
+): MysqlDb {
   const host = iniConfig['hebcal.mysql.host'];
   const port = +iniConfig['hebcal.mysql.port'] || 3306;
   const user = iniConfig['hebcal.mysql.user'];
   const password = iniConfig['hebcal.mysql.password'];
   const database = iniConfig['hebcal.mysql.dbname'];
-  const connURL = `mysql://${user}@${host}:${port}/${database}`;
-  logger.info(`Connecting to ${connURL}`);
-  const connection = await mysql.createConnection({
+  const connectionConfig: ConnectionOptions = {
     host,
     port,
     user,
     password,
     database,
-  });
-  try {
-    await connection.connect();
-  } catch (err) {
-    logger.fatal(err, `Cannot connect to ${connURL}`);
-    throw err;
-  }
-  logger.debug('connected as id ' + connection.threadId);
-  return connection;
+  };
+  return new MysqlDb(logger, connectionConfig);
 }
 
 /**

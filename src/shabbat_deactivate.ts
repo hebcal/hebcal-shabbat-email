@@ -3,9 +3,8 @@ import fs from 'fs';
 import ini from 'ini';
 import pino from 'pino';
 import minimist from 'minimist';
-import mysql from 'mysql2/promise';
-import {makeDb, dirIfExistsOrCwd} from './makedb';
-import {getLogLevel} from './common';
+import {makeDb, dirIfExistsOrCwd, MysqlDb} from './makedb.js';
+import {getLogLevel} from './common.js';
 
 const PROG = 'shabbat_deactivate.js';
 const COUNT_DEFAULT = 7;
@@ -37,17 +36,17 @@ main()
   });
 
 async function main() {
-  const db = await makeDb(logger, config);
+  const db = makeDb(logger, config);
   logdir = await dirIfExistsOrCwd('/var/log/hebcal');
   const addrs = await getCandidates(db);
   logger.info(`Deactivating ${addrs.length} subscriptions`);
   if (!argv.dryrun && addrs.length) {
     await deactivateSubs(db, addrs);
   }
-  return db.end();
+  return db.close();
 }
 
-async function deactivateSubs(db: mysql.Connection, addrs: string[]) {
+async function deactivateSubs(db: MysqlDb, addrs: string[]) {
   const emails = addrs.join("','");
   const sql1 = `UPDATE hebcal_shabbat_email
   SET email_status='bounce' WHERE email_address IN('${emails}')`;
@@ -78,7 +77,7 @@ async function deactivateSubs(db: mysql.Connection, addrs: string[]) {
   });
 }
 
-async function getCandidates(db: mysql.Connection): Promise<string[]> {
+async function getCandidates(db: MysqlDb): Promise<string[]> {
   const reasons = argv.reasons.split(',');
   const reasonsSql = reasons.join("','");
   const sql = `

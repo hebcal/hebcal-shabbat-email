@@ -24,8 +24,8 @@ import {
   makeTransporter,
   msleep,
   shouldSendEmailToday,
-} from './common';
-import {dirIfExistsOrCwd, makeDb} from './makedb';
+} from './common.js';
+import {dirIfExistsOrCwd, makeDb} from './makedb.js';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: [
@@ -160,7 +160,7 @@ async function mainInner(
     if (!argv.dryrun) {
       writeLogLine(logStream, cfg, info);
     }
-    if (argv.sleeptime && i != count - 1) {
+    if (argv.sleeptime && i !== count - 1) {
       msleep(argv.sleeptime);
     }
     i++;
@@ -553,7 +553,7 @@ async function loadSubs(
   config: {[s: string]: string},
   addrs: string[]
 ): Promise<Map<string, CandleConfig>> {
-  const db = await makeDb(logger, config);
+  const db = makeDb(logger, config);
   const allSql = addrs?.length
     ? "AND email_address IN ('" + addrs.join("','") + "')"
     : '';
@@ -566,9 +566,9 @@ async function loadSubs(
        email_candles_havdalah,
        email_havdalah_tzeit,
        email_sundown_candles
-FROM 
+FROM hebcal_shabbat_email
 WHERE email_status = 'active'
-AND email_ip IS NOT NULLhebcal_shabbat_email
+AND email_ip IS NOT NULL
 ${allSql}`;
   logger.info(sql);
   const results = await db.query(sql);
@@ -579,7 +579,7 @@ ${allSql}`;
       subs.set(cfg.email, cfg);
     }
   }
-  await db.end();
+  await db.close();
   return subs;
 }
 

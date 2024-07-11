@@ -7,10 +7,9 @@ import {
 import fs from 'fs';
 import ini from 'ini';
 import minimist from 'minimist';
-import mysql from 'mysql2/promise';
 import pino from 'pino';
-import {getLogLevel, makeTransporter, translateSmtpStatus} from './common';
-import {dirIfExistsOrCwd, makeDb} from './makedb';
+import {getLogLevel, makeTransporter, translateSmtpStatus} from './common.js';
+import {dirIfExistsOrCwd, makeDb, MysqlDb} from './makedb.js';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['quiet', 'verbose'],
@@ -66,7 +65,7 @@ function getStdReason(bounce: any): string {
   return 'unknown';
 }
 
-async function readBounceQueue(sqs: SQSClient, db: mysql.Connection) {
+async function readBounceQueue(sqs: SQSClient, db: MysqlDb) {
   const bounceLogFilename =
     logdir + '/bounce-' + new Date().toISOString().substring(0, 7) + '.log';
   const bounceLogStream = fs.createWriteStream(bounceLogFilename, {flags: 'a'});
@@ -143,7 +142,7 @@ async function readBounceQueue(sqs: SQSClient, db: mysql.Connection) {
   }
 }
 
-async function readUnsubQueue(sqs: SQSClient, db: mysql.Connection) {
+async function readUnsubQueue(sqs: SQSClient, db: MysqlDb) {
   const subsLogFilename = logdir + '/subscribers.log';
   const subsLogStream = fs.createWriteStream(subsLogFilename, {flags: 'a'});
   const queueURL = config['hebcal.aws.sns.email-unsub.url'];
@@ -230,7 +229,7 @@ async function errorMail(emailAddress: string) {
 }
 
 async function unsubscribe(
-  db: mysql.Connection,
+  db: MysqlDb,
   destination: string,
   emailAddress: string,
   emailId: string,
@@ -297,9 +296,9 @@ async function unsubscribe(
 }
 
 async function main() {
-  const db = await makeDb(logger, config);
+  const db = makeDb(logger, config);
   logdir = await dirIfExistsOrCwd('/var/log/hebcal');
   await readUnsubQueue(sqs, db);
   await readBounceQueue(sqs, db);
-  return db.end();
+  return db.close();
 }
