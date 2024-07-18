@@ -25,6 +25,7 @@ export class MysqlDb {
     });
     this.connection = connection;
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async query(sql: string, values?: any[]): Promise<RowDataPacket[]> {
     return new Promise((resolve, reject) => {
       const qopts: QueryOptions = {sql};
@@ -76,12 +77,12 @@ export function makeDb(
  * Returns directory name if it exists, else '.' for current working directory
  */
 export async function dirIfExistsOrCwd(dir: string): Promise<string> {
-  return new Promise((resolve, reject) => {
+  return new Promise(resolve => {
     fs.stat(dir, (err, stats) => {
       if (err) {
         return resolve('.');
       }
-      if (!stats || !stats.isDirectory()) {
+      if (!stats?.isDirectory()) {
         return resolve('.');
       }
       return resolve(dir);

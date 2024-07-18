@@ -26,6 +26,7 @@ import {
   shouldSendEmailToday,
 } from './common.js';
 import {dirIfExistsOrCwd, makeDb} from './makedb.js';
+import {RowDataPacket} from 'mysql2';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: [
@@ -116,8 +117,28 @@ async function main() {
   });
 }
 
+function compareConfigs(a: CandleConfig, b: CandleConfig): number {
+  const locA = a.location;
+  const locB = b.location;
+  const lonA = locA.getLongitude();
+  const lonB = locB.getLongitude();
+  if (lonA === lonB) {
+    const latA = locA.getLatitude();
+    const latB = locB.getLatitude();
+    if (latA === latB) {
+      const nameA = locA.getName()!;
+      const nameB = locB.getName()!;
+      return nameA.localeCompare(nameB);
+    } else {
+      return latA - latB;
+    }
+  } else {
+    return lonB - lonA;
+  }
+}
+
 async function mainInner(
-  subs: Map<string, any>,
+  subs: Map<string, CandleConfig>,
   config: {[s: string]: any},
   sentLogFilename: string
 ) {
@@ -125,22 +146,7 @@ async function mainInner(
 
   logger.info(`Sorting ${subs.size} users by lat/long`);
   const cfgs = Array.from(subs.values());
-  cfgs.sort((a, b) => {
-    const alon = a.location.getLongitude();
-    const blon = b.location.getLongitude();
-    if (alon === blon) {
-      const alat = a.location.getLatitude();
-      const blat = b.location.getLatitude();
-      if (alat === blat) {
-        return a.location.getName().localeCompare(b.location.getName());
-      } else {
-        return alat - blat;
-      }
-    } else {
-      return blon - alon;
-    }
-  });
-
+  cfgs.sort(compareConfigs);
   const transporter = argv.dryrun
     ? null
     : argv.localhost
@@ -159,9 +165,9 @@ async function mainInner(
     const info = await mailUser(transporter, cfg);
     if (!argv.dryrun) {
       writeLogLine(logStream, cfg, info);
-    }
-    if (argv.sleeptime && i !== count - 1) {
-      msleep(argv.sleeptime);
+      if (argv.sleeptime && i !== count - 1) {
+        msleep(argv.sleeptime);
+      }
     }
     i++;
   }
@@ -583,7 +589,7 @@ ${allSql}`;
   return subs;
 }
 
-function makeCandlesCfg(row: any): CandleConfig | null {
+function makeCandlesCfg(row: RowDataPacket): CandleConfig | null {
   const email = row.email_address;
   const cfg: CandleConfig = {
     id: row.email_id,
