@@ -141,6 +141,14 @@ AND e.calendar_id = y.id`;
     logger.debug(status);
   }
 
+  const calendarIds0 = rows.map(row => row.calendar_id as string);
+  const calendarIds = Array.from(new Set(calendarIds0));
+  logger.info(`Updating access time for ${calendarIds.length} calendars`);
+  for (const calendarId of calendarIds) {
+    const sql2 = 'REPLACE INTO yahrzeit_atime (id, ts) VALUES (?, NOW())';
+    await db.query(sql2, [calendarId]);
+  }
+
   db.close();
 }
 

@@ -154,17 +154,23 @@ AND e.calendar_id = y.id`;
   }
   logger.info(`Loaded ${rows.length} active subscriptions from DB`);
 
+  const done = new Set<string>();
   for (const row of rows) {
+    const calendarId = row.calendar_id;
+    if (done.has(calendarId)) {
+      continue;
+    }
     const contents: RawYahrzeitContents = row.contents;
     if (!contents.em) {
       contents.em = row.email_addr;
       compactJsonToSave(contents);
-      console.log(row.calendar_id, row.email_addr);
+      console.log(calendarId, row.email_addr);
       const contentsStr = JSON.stringify(contents);
       const sql2 =
         'UPDATE yahrzeit SET updated = NOW(), contents = ? WHERE id = ?';
-      const rows = await db.query(sql2, [contentsStr, row.calendar_id]);
+      const rows = await db.query(sql2, [contentsStr, calendarId]);
     }
+    done.add(calendarId);
   }
 
   db.close();
