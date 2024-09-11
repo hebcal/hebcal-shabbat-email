@@ -147,7 +147,7 @@ AND e.calendar_id = y.id`;
 
   logger.debug(sql);
   const rows = await db.query(sql);
-  if (!rows || !rows.length) {
+  if (!rows?.length) {
     logger.error('Got zero rows from DB!?');
     db.close();
     return;
