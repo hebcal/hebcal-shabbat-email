@@ -80,7 +80,7 @@ main()
 /**
  * Sends the message via nodemailer, or no-op for dryrun
  */
-async function sendMail(message: nodemailer.SendMailOptions): Promise<any> {
+async function sendMail(message: nodemailer.SendMailOptions): Promise<unknown> {
   if (argv.dryrun) {
     return {response: '250 OK', messageId: message.messageId, dryrun: true};
   } else {
@@ -329,7 +329,7 @@ function computeAnniversary(info: SubInfo) {
   }
 }
 
-async function processAnniversary(info: SubInfo): Promise<any> {
+async function processAnniversary(info: SubInfo): Promise<unknown> {
   const message = makeMessage(info);
   let status;
   try {
@@ -501,7 +501,7 @@ function makeSubject(type: string, observed: dayjs.Dayjs): string {
   return `${type} Observance for ${dateRange}`;
 }
 
-function empty(val: any): boolean {
+function empty(val: unknown): boolean {
   return typeof val !== 'string' || val.length === 0;
 }
 

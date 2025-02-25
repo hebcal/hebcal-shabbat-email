@@ -30,7 +30,7 @@ type RawYahrzeitContents = {
   [s: string]: string | number;
 };
 
-function empty(val: any): boolean {
+function empty(val: unknown): boolean {
   return typeof val !== 'string' || val.length === 0;
 }
 

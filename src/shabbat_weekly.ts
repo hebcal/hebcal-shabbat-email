@@ -217,7 +217,7 @@ function getStartAndEnd(now: Date): dayjs.Dayjs[] {
 async function mailUser(
   transporter: nodemailer.Transporter | null,
   cfg: CandleConfig
-): Promise<any> {
+): Promise<unknown> {
   const message = getMessage(cfg);
   if (!transporter) {
     return undefined;
@@ -364,7 +364,8 @@ function genSubjectAndBody(
   let sedra;
   let prevStrtime;
   for (const ev of events) {
-    const timed = Boolean((ev as any).eventTime);
+    const ev0 = ev as any;
+    const timed = Boolean(ev0.eventTime);
     const title = timed ? ev.renderBrief() : ev.render();
     const title1 = title.replace(/'/g, '’');
     const desc = ev.getDesc();
@@ -383,7 +384,7 @@ function genSubjectAndBody(
     }
     const emoji = ev.getEmoji();
     if (timed) {
-      const eventTimeStr: string = (ev as any).eventTimeStr;
+      const eventTimeStr: string = ev0.eventTimeStr;
       const hourMin = HebrewCalendar.reformatTimeStr(
         eventTimeStr,
         'pm',
@@ -405,11 +406,7 @@ function genSubjectAndBody(
       htmlBody += `<div style="${ITEM_STYLE}">Torah portion: <a href="${url2}">${title1}</a></div>\n`;
     } else {
       const dow = dt.day();
-      if (
-        dow === 6 &&
-        !sedra &&
-        (mask & flags.CHAG || (ev as any).cholHaMoedDay)
-      ) {
+      if (dow === 6 && !sedra && (mask & flags.CHAG || ev0.cholHaMoedDay)) {
         sedra = ev.basename();
       }
       body += `  ${title}\n`;
