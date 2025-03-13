@@ -2,14 +2,8 @@
 import dayjs, {Dayjs} from 'dayjs';
 import fs from 'fs';
 import ini from 'ini';
-import {
-  Event,
-  flags,
-  HDate,
-  HebrewCalendar,
-  Locale,
-  months,
-} from '@hebcal/core';
+import {HDate, months, getYahrzeitHD, getBirthdayHD} from '@hebcal/hdate';
+import {Event, flags, Locale} from '@hebcal/core';
 import pino from 'pino';
 import minimist from 'minimist';
 import nodemailer from 'nodemailer';
@@ -316,11 +310,12 @@ WHERE datediff(NOW(), sent_date) < 365`;
 function computeAnniversary(info: SubInfo) {
   const hyear = info.hyear;
   const origDt = info.day.toDate();
-  const hd =
+  const hd0 =
     info.type === 'Yahrzeit'
-      ? HebrewCalendar.getYahrzeit(hyear, origDt)
-      : HebrewCalendar.getBirthdayOrAnniversary(hyear, origDt);
-  if (hd) {
+      ? getYahrzeitHD(hyear, origDt)
+      : getBirthdayHD(hyear, origDt);
+  if (hd0) {
+    const hd = new HDate(hd0);
     const observed = (info.observed = dayjs(hd.greg()));
     info.diff = observed.diff(today, 'd');
     info.hd = hd;
@@ -557,10 +552,17 @@ function getYahrzeitDetailForId(
   if (empty(dd) || empty(mm) || empty(yy)) {
     return null;
   }
+  const year = parseInt(yy, 10);
+  const month = parseInt(mm, 10);
+  const mday = parseInt(dd, 10);
+  if (!mday || !month || !year) {
+    logger.warn(query, `Invalid date for entry ${num}`);
+    return null;
+  }
   const type = getAnniversaryType(query['t' + num] as string);
   const sunset: string | number = query[`s${num}`];
   const name = getAnniversaryName(query, num, type);
-  let day = dayjs(new Date(+yy, +mm - 1, +dd));
+  let day = dayjs(new Date(year, month - 1, mday));
   if (sunset === 'on' || sunset === '1' || sunset === 1) {
     day = day.add(1, 'day');
   }
