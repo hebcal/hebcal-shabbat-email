@@ -63,7 +63,7 @@ const [midnight, endOfWeek] = getStartAndEnd(TODAY);
 const midnightDt = midnight.toDate();
 const endOfWeekDt = endOfWeek.toDate();
 logger.debug(
-  `start=${midnight.format('YYYY-MM-DD')}, endOfWeek=${endOfWeek.format('YYYY-MM-DD')}`
+  `start=${midnight.format('YYYY-MM-DD')}, endOfWeek=${endOfWeek.format('YYYY-MM-DD')}`,
 );
 
 const FORMAT_DOW_MONTH_DAY = 'dddd, MMMM D';
@@ -140,7 +140,7 @@ function compareConfigs(a: CandleConfig, b: CandleConfig): number {
 async function mainInner(
   subs: Map<string, CandleConfig>,
   config: {[s: string]: any},
-  sentLogFilename: string
+  sentLogFilename: string,
 ) {
   parseAllConfigs(subs);
 
@@ -202,7 +202,7 @@ function writeLogLine(logStream: fs.WriteStream, cfg: CandleConfig, info: any) {
  */
 function getStartAndEnd(now: Date): dayjs.Dayjs[] {
   const midnight = dayjs(
-    new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    new Date(now.getFullYear(), now.getMonth(), now.getDate()),
   );
   const dow = midnight.day();
   const saturday = midnight.add(6 - dow, 'day');
@@ -216,7 +216,7 @@ function getStartAndEnd(now: Date): dayjs.Dayjs[] {
  */
 async function mailUser(
   transporter: nodemailer.Transporter | null,
-  cfg: CandleConfig
+  cfg: CandleConfig,
 ): Promise<unknown> {
   const message = getMessage(cfg);
   if (!transporter) {
@@ -261,7 +261,7 @@ ${unsubUrl}
     modify: urlEncodeAndTrack(`${unsubUrl}&modify=1`),
     open: openUrl.replace(/&/g, '&amp;'),
     privacy: urlEncodeAndTrack(
-      'https://www.hebcal.com/home/about/privacy-policy'
+      'https://www.hebcal.com/home/about/privacy-policy',
     ),
   };
   // eslint-disable-next-line max-len
@@ -356,7 +356,7 @@ const ITEM_STYLE = 'padding-left:8px;margin-bottom:2px';
 function genSubjectAndBody(
   events: Event[],
   options: CalOptions,
-  cfg: CandleConfig
+  cfg: CandleConfig,
 ): string[] {
   let body = '';
   let htmlBody = '';
@@ -388,7 +388,7 @@ function genSubjectAndBody(
       const hourMin = HebrewCalendar.reformatTimeStr(
         eventTimeStr,
         'pm',
-        options
+        options,
       );
       if (!firstCandles && desc === 'Candle lighting') {
         firstCandles = hourMin;
@@ -443,7 +443,7 @@ function urlEncodeAndTrack(url: string, il?: boolean): string {
     il,
     'newsletter',
     'email',
-    'shabbat-weekly'
+    'shabbat-weekly',
   );
   return url.replace(/&/g, '&amp;');
 }
@@ -465,7 +465,7 @@ function getSpecialNote(cfg: CandleConfig, isHTML: boolean): string {
     return isHTML
       ? urlEncodeAndTrack(
           `https://www.hebcal.com/holidays/${holiday}-${gy}`,
-          il
+          il,
         )
       : `https://hebcal.com/h/${holiday}-${gy}${il ? '?i=on' : ''}`;
   }
@@ -554,7 +554,7 @@ ${when} on ${strtime}.`;
 
 async function loadSubs(
   config: {[s: string]: string},
-  addrs: string[]
+  addrs: string[],
 ): Promise<Map<string, CandleConfig>> {
   const db = makeDb(logger, config);
   const allSql = addrs?.length
@@ -672,7 +672,7 @@ function parseAllConfigs(subs: Map<string, CandleConfig>) {
   if (failures.length) {
     failures.forEach(x => subs.delete(x));
     logger.warn(
-      `Skipped ${failures.length} subscribers due to config failures`
+      `Skipped ${failures.length} subscribers due to config failures`,
     );
   }
   if (argv.positive || argv.negative) {

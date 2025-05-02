@@ -86,7 +86,7 @@ const noSaveFields = ['ulid', 'v', 'ref_url', 'ref_text', 'lastModified'];
 
 function compactJsonItem(
   obj: {[x: string]: any; years?: any; em?: any},
-  num: string | number
+  num: string | number,
 ) {
   const yk = 'y' + num;
   const mk = 'm' + num;

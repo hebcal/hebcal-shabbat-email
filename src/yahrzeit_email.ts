@@ -176,7 +176,7 @@ type RawYahrzeitContents = {
 
 async function loadSubsFromDb(
   rows: RowDataPacket[],
-  optout: StringDateMap
+  optout: StringDateMap,
 ): Promise<SubInfo[]> {
   const htoday = new HDate(today.toDate());
   const hyears = [htoday.getFullYear()];
@@ -225,7 +225,7 @@ async function loadSubsFromDb(
 function skipOptOut(
   subscriptionId: string,
   info: SubBase,
-  optout: StringDateMap
+  optout: StringDateMap,
 ) {
   const num = info.num;
   const idNum = `${subscriptionId}.${num}`;
@@ -244,7 +244,7 @@ function makeSubInfo(
   info0: SubBase,
   hyear: number,
   sent: StringDateMap,
-  maxDays: number
+  maxDays: number,
 ): SubInfo | false {
   const id = contents.id;
   const idNum = `${id}.${num}`;
@@ -446,7 +446,7 @@ ${imgOpen}
         alarm: 'P0DT0H0M0S',
         uid: `reminder-${info.anniversaryId}`,
         category: 'Personal',
-      }
+      },
     );
     const ical = new IcalEvent(ev, {});
     const lines =
@@ -546,7 +546,7 @@ function getAnniversaryType(str: string): string {
 
 function getYahrzeitDetailForId(
   query: RawYahrzeitContents,
-  num: number
+  num: number,
 ): SubBase | null {
   const {yy, mm, dd} = getDateForId(query, num);
   if (empty(dd) || empty(mm) || empty(yy)) {
@@ -573,7 +573,7 @@ function getYahrzeitDetailForId(
 function getAnniversaryName(
   query: RawYahrzeitContents,
   id: number,
-  type: string
+  type: string,
 ): string {
   const str = query[`n${id}`];
   const name0 = typeof str === 'string' ? str.trim() : undefined;

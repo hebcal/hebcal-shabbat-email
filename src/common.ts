@@ -62,7 +62,8 @@ export function shouldSendEmailToday(today: Dayjs): boolean {
     case 2:
       // send email today (Tuesday) because Wed & Thurs are both yontiff
       return Boolean(
-        getChagOnDate(today.add(1, 'day')) && getChagOnDate(today.add(2, 'day'))
+        getChagOnDate(today.add(1, 'day')) &&
+          getChagOnDate(today.add(2, 'day')),
       );
     default:
       // no email today - not Tue/Wed/Thu

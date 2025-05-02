@@ -120,7 +120,7 @@ async function readBounceQueue(sqs: SQSClient, db: MysqlDb) {
         await db.query(sql, [emailAddress, stdReason, stdReason]);
       } else {
         logger.warn(
-          `Ignoring unknown bounce message ${innerMsg.notificationType}`
+          `Ignoring unknown bounce message ${innerMsg.notificationType}`,
         );
         innerMsg.hebcal.ignored = true;
         console.log(innerMsg);
@@ -137,7 +137,7 @@ async function readBounceQueue(sqs: SQSClient, db: MysqlDb) {
         };
         const command = new DeleteMessageCommand(params);
         return sqs.send(command);
-      })
+      }),
     );
   }
 }
@@ -195,7 +195,7 @@ async function readUnsubQueue(sqs: SQSClient, db: MysqlDb) {
           source,
           emailId,
           innerMsg,
-          subsLogStream
+          subsLogStream,
         );
       }
     }
@@ -208,7 +208,7 @@ async function readUnsubQueue(sqs: SQSClient, db: MysqlDb) {
         };
         const command = new DeleteMessageCommand(params);
         return sqs.send(command);
-      })
+      }),
     );
   }
 }
@@ -234,7 +234,7 @@ async function unsubscribe(
   emailAddress: string,
   emailId: string,
   innerMsg: any,
-  logStream: fs.WriteStream
+  logStream: fs.WriteStream,
 ) {
   const t = Math.floor(new Date().getTime() / 1000);
   const sql =
