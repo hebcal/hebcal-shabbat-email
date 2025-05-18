@@ -121,7 +121,7 @@ AND e.calendar_id = y.id`;
   const rows = await db.query(sql);
   if (!rows || !rows.length) {
     logger.error('Got zero rows from DB!?');
-    db.close();
+    await db.close();
     return;
   }
   logger.info(`Loaded ${rows.length} active subscriptions from DB`);
@@ -143,7 +143,7 @@ AND e.calendar_id = y.id`;
     await db.query(sql2, [calendarId]);
   }
 
-  db.close();
+  await db.close();
 }
 
 type SubBase = {

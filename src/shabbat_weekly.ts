@@ -109,10 +109,15 @@ async function main() {
         logger.error(err);
         reject(err);
       }
-      mainInner(subs, config, sentLogFilename).then(() => {
-        fs.closeSync(lockfile);
-        resolve(true);
-      });
+      mainInner(subs, config, sentLogFilename)
+        .then(() => {
+          fs.closeSync(lockfile);
+          resolve(true);
+        })
+        .catch((err: Error) => {
+          logger.error(err);
+          reject(err);
+        });
     });
   });
 }
