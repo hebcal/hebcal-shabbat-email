@@ -371,7 +371,9 @@ function genSubjectAndBody(
   for (const ev of events) {
     const ev0 = ev as any;
     const timed = Boolean(ev0.eventTime);
-    const title = timed ? ev.renderBrief() : ev.render();
+    const title = timed
+      ? ev.renderBrief(options.locale)
+      : ev.render(options.locale);
     const title1 = title.replace(/'/g, '’');
     const desc = ev.getDesc();
     const hd = ev.getDate();
