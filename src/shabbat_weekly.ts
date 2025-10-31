@@ -343,6 +343,7 @@ function getSubjectAndBody(cfg: CandleConfig): string[] {
     il: location.getIsrael(),
     sedrot: true,
     shabbatMevarchim: true,
+    molad: true,
     useElevation: cfg.ue,
   };
   if (typeof cfg.m === 'number') {
