@@ -44,7 +44,7 @@
     "@hebcal/core": "^6.0.5",
     "@hebcal/geo-sqlite": "^5.4.0",
     "@hebcal/hdate": "^0.21.1",
-    "@hebcal/icalendar": "^6.3.0",
+    "@hebcal/icalendar": "^6.3.1",
     "@hebcal/rest-api": "^6.3.0",
     "better-sqlite3": "^12.4.1",
     "csv-parse": "^6.1.0",
