@@ -21,7 +21,7 @@ export class MysqlDb {
         logger.fatal(err, `Cannot connect to ${connURL}`);
         throw err;
       }
-      logger.debug('connected as id ' + connection.threadId);
+      logger.debug('MysqlDb: connected as id ' + connection.threadId);
     });
     this.connection = connection;
   }

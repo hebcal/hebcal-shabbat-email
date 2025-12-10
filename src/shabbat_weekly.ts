@@ -67,7 +67,7 @@ logger.debug(
 );
 
 const FORMAT_DOW_MONTH_DAY = 'dddd, MMMM D';
-const geoDb = new GeoDb(logger, 'zips.sqlite3', 'geonames.sqlite3');
+const geoDb = new GeoDb(null, 'zips.sqlite3', 'geonames.sqlite3');
 
 main()
   .then(() => {
@@ -611,7 +611,7 @@ function makeCandlesCfg(row: RowDataPacket): CandleConfig | null {
   } else if (row.email_candles_city) {
     cfg.legacyCity = row.email_candles_city.replace(/\+/g, ' ');
   } else {
-    logger.warn(`no geographic key for to=${email}, id=${cfg.id}`);
+    logger.warn(`no geographic key: to=${email}, id=${cfg.id}`);
     return null;
   }
   return cfg;
@@ -638,26 +638,28 @@ function loadSentLog(sentLogFilename: string): Set<string> {
   return result;
 }
 
+function getLocation(cfg: CandleConfig): Location | undefined {
+  if (cfg.zip) return geoDb.lookupZip(cfg.zip);
+  if (cfg.geonameid) return geoDb.lookupGeoname(cfg.geonameid);
+  if (cfg.legacyCity) return geoDb.lookupLegacyCity(cfg.legacyCity);
+  return undefined;
+}
+
 /**
  * Scans subs map and removes invalid entries
  */
 function parseConfig(to: string, cfg: CandleConfig): boolean {
-  const location = cfg.zip
-    ? geoDb.lookupZip(cfg.zip)
-    : cfg.legacyCity
-      ? geoDb.lookupLegacyCity(cfg.legacyCity)
-      : cfg.geonameid
-        ? geoDb.lookupGeoname(cfg.geonameid)
-        : undefined;
-
+  const location = getLocation(cfg);
   if (!location) {
-    logger.warn('Skipping bad config: ' + JSON.stringify(cfg));
+    const src = cfg.zip ? 'zip' : cfg.geonameid ? 'geonameid' : 'legacyCity';
+    const val = cfg.zip || cfg.geonameid || cfg.legacyCity;
+    logger.warn(`Location not found: ${src}=${val}, to=${to}, id=${cfg.id}`);
     return false;
   } else if (location.getLongitude() === 0 && location.getLatitude() === 0) {
-    logger.warn(`Suspicious zero lat/long for to=${to}, id=${cfg.id}`);
+    logger.warn(`Suspicious zero lat/long: to=${to}, id=${cfg.id}`);
     return false;
   } else if (!location.getTzid()) {
-    logger.warn(`Unknown tzid for to=${to}, id=${cfg.id}`);
+    logger.warn(`Unknown tzid: to=${to}, id=${cfg.id}`);
     return false;
   }
 
