@@ -43,7 +43,7 @@
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.958.0",
     "@hebcal/core": "^6.0.6",
-    "@hebcal/geo-sqlite": "^5.7.1",
+    "@hebcal/geo-sqlite": "^5.7.2",
     "@hebcal/hdate": "^0.21.1",
     "@hebcal/icalendar": "^6.3.3",
     "@hebcal/rest-api": "^6.4.0",
