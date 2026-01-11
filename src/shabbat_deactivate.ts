@@ -1,4 +1,4 @@
-import fs from 'fs';
+import fs from 'node:fs';
 import ini from 'ini';
 import pino from 'pino';
 import minimist from 'minimist';

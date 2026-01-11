@@ -10,7 +10,7 @@ import {
 import {GeoDb} from '@hebcal/geo-sqlite';
 import {appendIsraelAndTracking} from '@hebcal/rest-api';
 import dayjs from 'dayjs';
-import fs from 'fs';
+import fs from 'node:fs';
 import {flock} from 'fs-ext';
 import {htmlToText} from 'html-to-text';
 import ini from 'ini';

@@ -1,5 +1,5 @@
 /* global process */
-import fs from 'fs';
+import fs from 'node:fs';
 import ini from 'ini';
 import {parse} from 'csv-parse';
 import {makeDb} from './makedb.js';

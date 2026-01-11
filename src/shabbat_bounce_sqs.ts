@@ -3,7 +3,7 @@ import {
   ReceiveMessageCommand,
   SQSClient,
 } from '@aws-sdk/client-sqs';
-import fs from 'fs';
+import fs from 'node:fs';
 import ini from 'ini';
 import minimist from 'minimist';
 import pino from 'pino';

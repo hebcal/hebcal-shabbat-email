@@ -1,7 +1,7 @@
 /* global process */
 import minimist from 'minimist';
 import pino from 'pino';
-import fs from 'fs';
+import fs from 'node:fs';
 import ini from 'ini';
 import {makeDb} from './makedb.js';
 

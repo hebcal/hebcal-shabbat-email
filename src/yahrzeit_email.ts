@@ -1,5 +1,5 @@
 import dayjs, {Dayjs} from 'dayjs';
-import fs from 'fs';
+import fs from 'node:fs';
 import ini from 'ini';
 import {HDate, months, getYahrzeitHD, getBirthdayHD} from '@hebcal/hdate';
 import {Event, flags, Locale} from '@hebcal/core';
