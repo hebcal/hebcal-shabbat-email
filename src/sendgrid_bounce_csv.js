@@ -1,3 +1,4 @@
+/* global process */
 import fs from 'fs';
 import ini from 'ini';
 import {parse} from 'csv-parse';
@@ -18,14 +19,14 @@ const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 
 main()
-    .then(() => {
-      logger.info('Success!');
-    })
-    .catch((err) => {
-      logger.fatal(err);
-      // eslint-disable-next-line n/no-process-exit
-      process.exit(1);
-    });
+  .then(() => {
+    logger.info('Success!');
+  })
+  .catch(err => {
+    logger.fatal(err);
+
+    process.exit(1);
+  });
 
 const sql = `INSERT INTO hebcal_shabbat_bounce
 (email_address,timestamp,std_reason,full_reason,deactivated)
@@ -50,9 +51,11 @@ async function main() {
 async function processFile(filename) {
   const records = [];
   const rs = fs.createReadStream(filename);
-  const parser = rs.pipe(parse({
-    // CSV options if any
-  }));
+  const parser = rs.pipe(
+    parse({
+      // CSV options if any
+    }),
+  );
   for await (const record of parser) {
     // Work with each record
     records.push(record);

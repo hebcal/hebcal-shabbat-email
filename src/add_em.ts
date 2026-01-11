@@ -1,4 +1,3 @@
-/* eslint-disable n/no-process-exit */
 import fs from 'fs';
 import ini from 'ini';
 import minimist from 'minimist';
@@ -168,7 +167,7 @@ AND e.calendar_id = y.id`;
       const contentsStr = JSON.stringify(contents);
       const sql2 =
         'UPDATE yahrzeit SET updated = NOW(), contents = ? WHERE id = ?';
-      const rows = await db.query(sql2, [contentsStr, calendarId]);
+      await db.query(sql2, [contentsStr, calendarId]);
     }
     done.add(calendarId);
   }

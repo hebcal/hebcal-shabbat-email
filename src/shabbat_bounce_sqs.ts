@@ -1,4 +1,3 @@
-/* eslint-disable n/no-process-exit */
 import {
   DeleteMessageCommand,
   ReceiveMessageCommand,
@@ -78,7 +77,7 @@ async function readBounceQueue(sqs: SQSClient, db: MysqlDb) {
   };
   const sql =
     'INSERT INTO hebcal_shabbat_bounce (email_address,std_reason,full_reason,deactivated) VALUES (?,?,?,0)';
-  // eslint-disable-next-line no-constant-condition
+
   while (true) {
     logger.debug('Bounces: polling for a batch');
     const command = new ReceiveMessageCommand(params);
@@ -152,7 +151,7 @@ async function readUnsubQueue(sqs: SQSClient, db: MysqlDb) {
     MaxNumberOfMessages: 10,
     WaitTimeSeconds: 5,
   };
-  // eslint-disable-next-line no-constant-condition
+
   while (true) {
     logger.debug('Unsubscribes: polling for a batch');
     const command = new ReceiveMessageCommand(params);

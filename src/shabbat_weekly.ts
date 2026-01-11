@@ -1,4 +1,3 @@
-/* eslint-disable n/no-process-exit */
 import {
   CalOptions,
   Event,
@@ -269,7 +268,7 @@ ${unsubUrl}
       'https://www.hebcal.com/home/about/privacy-policy',
     ),
   };
-  // eslint-disable-next-line max-len
+
   const imgOpen = `<img src="${urls.open}" alt="" width="1" height="1" border="0" style="height:1px!important;width:1px!important;border-width:0!important;margin-top:0!important;margin-bottom:0!important;margin-right:0!important;margin-left:0!important;padding-top:0!important;padding-bottom:0!important;padding-right:0!important;padding-left:0!important">`;
   const htmlBody = `${specialNote}
 <div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
@@ -551,7 +550,6 @@ ${when} on ${strtime}.`;
     return htmlToText(note, htmlToTextOptions) + '\n\n';
   }
 
-  // eslint-disable-next-line max-len
   return (
     '<div style="font-size:14px;font-family:arial,helvetica,sans-serif;padding:8px;color:#468847;background-color:#dff0d8;border-color:#d6e9c6;border-radius:4px">\n' +
     note +

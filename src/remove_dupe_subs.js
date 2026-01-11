@@ -1,4 +1,4 @@
-/* eslint-disable n/no-process-exit */
+/* global process */
 import minimist from 'minimist';
 import pino from 'pino';
 import fs from 'fs';
@@ -15,13 +15,13 @@ const logger = pino({
 });
 
 main()
-    .then(() => {
-      logger.info('Success!');
-    })
-    .catch((err) => {
-      logger.fatal(err);
-      process.exit(1);
-    });
+  .then(() => {
+    logger.info('Success!');
+  })
+  .catch(err => {
+    logger.fatal(err);
+    process.exit(1);
+  });
 
 async function main() {
   const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
@@ -39,15 +39,16 @@ async function loadSubs(iniConfig) {
 
   logger.info(sql);
   const results = await db.query(sql);
-  const calendarIds = results.map((row) => row.calendar_id);
+  const calendarIds = results.map(row => row.calendar_id);
 
   for (const calendarId of calendarIds) {
-    const sql2 = `select id from yahrzeit_email where calendar_id = ? and sub_status = 'active' order by updated desc`;
+    const sql2 =
+      "select id from yahrzeit_email where calendar_id = ? and sub_status = 'active' order by updated desc";
     logger.info(sql2);
     const results2 = await db.query(sql2, [calendarId]);
 
-    const emailIds = results2.map((row) => row.id);
-    const emailIdsStr = emailIds.join(`','`);
+    const emailIds = results2.map(row => row.id);
+    const emailIdsStr = emailIds.join("','");
     const sql3 = `select * from yahrzeit_optout where email_id in ('${emailIdsStr}')`;
     logger.info(sql3);
     const results3 = await db.query(sql3);
@@ -57,7 +58,7 @@ async function loadSubs(iniConfig) {
       continue;
     }
 
-    const toUnsub = emailIds.slice(1).join(`','`);
+    const toUnsub = emailIds.slice(1).join("','");
     const sql4 = `update yahrzeit_email set sub_status = 'unsub' where id in ('${toUnsub}')`;
     logger.info(sql4);
     await db.query(sql4);
