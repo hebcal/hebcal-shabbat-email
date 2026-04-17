@@ -15,12 +15,14 @@ const TABLES: {name: string; column: string}[] = [
   {name: 'email_open', column: 'ts'},
 ];
 
-const INACTIVE_TABLES: {
+type InactiveTable = {
   name: string;
   dateColumn: string;
   statusColumn: string;
   statuses: string[];
-}[] = [
+};
+
+const INACTIVE_TABLES: InactiveTable[] = [
   {
     name: 'hebcal_shabbat_email',
     dateColumn: 'email_updated',
@@ -31,7 +33,7 @@ const INACTIVE_TABLES: {
     name: 'yahrzeit_email',
     dateColumn: 'updated',
     statusColumn: 'sub_status',
-    statuses: ['pending', 'unsub'],
+    statuses: ['pending', 'unsub', 'bounce'],
   },
 ];
 
@@ -70,13 +72,7 @@ async function main() {
     await pruneTable(db, table.name, table.column);
   }
   for (const table of INACTIVE_TABLES) {
-    await pruneInactiveSubscribers(
-      db,
-      table.name,
-      table.dateColumn,
-      table.statusColumn,
-      table.statuses,
-    );
+    await pruneInactiveSubscribers(db, table);
   }
   return db.close();
 }
@@ -103,15 +99,11 @@ async function pruneTable(db: MysqlDb, table: string, column: string) {
   await batchDelete(db, table, deleteSql);
 }
 
-async function pruneInactiveSubscribers(
-  db: MysqlDb,
-  table: string,
-  dateColumn: string,
-  statusColumn: string,
-  statuses: string[],
-) {
+async function pruneInactiveSubscribers(db: MysqlDb, tbl: InactiveTable) {
+  const table = tbl.table;
+  const statuses = tbl.statuses;
   const placeholders = statuses.map(() => '?').join(',');
-  const whereClause = `${dateColumn} < DATE_SUB(NOW(), INTERVAL ${retentionMonths} MONTH) AND ${statusColumn} IN (${placeholders})`;
+  const whereClause = `${tbl.dateColumn} < DATE_SUB(NOW(), INTERVAL ${retentionMonths} MONTH) AND ${tbl.statusColumn} IN (${placeholders})`;
   const countSql = `SELECT COUNT(*) AS cnt FROM ${table} WHERE ${whereClause}`;
   const countResult = await db.query(countSql, statuses);
   const count = (countResult[0] as any).cnt;
