@@ -100,7 +100,7 @@ async function pruneTable(db: MysqlDb, table: string, column: string) {
 }
 
 async function pruneInactiveSubscribers(db: MysqlDb, tbl: InactiveTable) {
-  const table = tbl.table;
+  const table = tbl.name;
   const statuses = tbl.statuses;
   const placeholders = statuses.map(() => '?').join(',');
   const whereClause = `${tbl.dateColumn} < DATE_SUB(NOW(), INTERVAL ${retentionMonths} MONTH) AND ${tbl.statusColumn} IN (${placeholders})`;
