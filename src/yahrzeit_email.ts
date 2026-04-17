@@ -134,7 +134,7 @@ AND e.calendar_id = y.id`;
     logger.debug(status);
   }
 
-  const calendarIds0 = rows.map(row => row.calendar_id as string);
+  const calendarIds0 = toSend.map(info => info.calendarId as string);
   const calendarIds = Array.from(new Set(calendarIds0));
   logger.info(`Updating access time for ${calendarIds.length} calendars`);
   for (const calendarId of calendarIds) {
