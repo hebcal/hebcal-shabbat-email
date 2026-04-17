@@ -47,6 +47,9 @@ async function main() {
 
 async function deactivateSubs(db: MysqlDb, addrs: string[]) {
   const emails = addrs.join("','");
+  const sql0 = `UPDATE yahrzeit_email
+  SET sub_status='bounce' WHERE email_addr IN('${emails}')`;
+  await db.query(sql0);
   const sql1 = `UPDATE hebcal_shabbat_email
   SET email_status='bounce' WHERE email_address IN('${emails}')`;
   await db.query(sql1);
@@ -81,12 +84,9 @@ async function getCandidates(db: MysqlDb): Promise<string[]> {
   const reasonsSql = reasons.join("','");
   const sql = `
 SELECT b.email_address,std_reason,count(1) as count
-FROM hebcal_shabbat_email e,
-     hebcal_shabbat_bounce b
-WHERE e.email_address = b.email_address
-AND e.email_status = 'active'
+FROM hebcal_shabbat_bounce b
+WHERE b.deactivated = 0
 AND b.std_reason IN('${reasonsSql}')
-AND b.deactivated = 0
 AND DATEDIFF(NOW(), b.timestamp) < 365
 GROUP by b.email_address,std_reason`;
   logger.info(sql);
