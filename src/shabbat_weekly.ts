@@ -4,8 +4,10 @@ import {
   flags,
   HDate,
   HebrewCalendar,
+  HolidayEvent,
   Location,
   months,
+  TimedEvent,
 } from '@hebcal/core';
 import {GeoDb} from '@hebcal/geo-sqlite';
 import {appendIsraelAndTracking} from '@hebcal/rest-api';
@@ -45,7 +47,7 @@ if (argv.help) {
   process.exit(1);
 }
 // allow sleeptime=0 for no sleep
-argv.sleeptime = typeof argv.sleeptime === 'undefined' ? 300 : +argv.sleeptime;
+argv.sleeptime = argv.sleeptime === undefined ? 300 : +argv.sleeptime;
 
 const logger = pino({
   level: getLogLevel(argv),
@@ -67,16 +69,6 @@ logger.debug(
 
 const FORMAT_DOW_MONTH_DAY = 'dddd, MMMM D';
 const geoDb = new GeoDb(null, 'zips.sqlite3', 'geonames.sqlite3');
-
-main()
-  .then(() => {
-    geoDb.close();
-    logger.info('Success!');
-  })
-  .catch(err => {
-    logger.fatal(err);
-    process.exit(1);
-  });
 
 /**
  * Main event loop
@@ -263,7 +255,7 @@ ${unsubUrl}
     home: urlEncodeAndTrack('https://www.hebcal.com/'),
     unsub: urlEncodeAndTrack(`${unsubUrl}&unsubscribe=1`),
     modify: urlEncodeAndTrack(`${unsubUrl}&modify=1`),
-    open: openUrl.replace(/&/g, '&amp;'),
+    open: openUrl.replaceAll('&', '&amp;'),
     privacy: urlEncodeAndTrack(
       'https://www.hebcal.com/home/about/privacy-policy',
     ),
@@ -315,7 +307,15 @@ ${imgOpen}
   return message;
 }
 
-let prevCfg: CandleConfig;
+let prevCfg: CandleConfig = {
+  id: '',
+  email: '',
+  m: -1,
+  M: false,
+  b: -1,
+  ue: false,
+  location: dummyLocation,
+};
 let prevSubjAndBody: string[];
 
 /**
@@ -324,7 +324,6 @@ let prevSubjAndBody: string[];
 function getSubjectAndBody(cfg: CandleConfig): string[] {
   const location = cfg.location;
   if (
-    prevCfg &&
     cfg.m === prevCfg.m &&
     cfg.M === prevCfg.M &&
     cfg.b === prevCfg.b &&
@@ -368,12 +367,12 @@ function genSubjectAndBody(
   let sedra;
   let prevStrtime;
   for (const ev of events) {
-    const ev0 = ev as any;
+    const ev0 = ev as TimedEvent;
     const timed = Boolean(ev0.eventTime);
     const title = timed
       ? ev.renderBrief(options.locale)
       : ev.render(options.locale);
-    const title1 = title.replace(/'/g, '’');
+    const title1 = title.replaceAll("'", '’');
     const desc = ev.getDesc();
     const hd = ev.getDate();
     const dt = dayjs(hd.greg());
@@ -412,7 +411,8 @@ function genSubjectAndBody(
       htmlBody += `<div style="${ITEM_STYLE}">Torah portion: <a href="${url2}">${title1}</a></div>\n`;
     } else {
       const dow = dt.day();
-      if (dow === 6 && !sedra && (mask & flags.CHAG || ev0.cholHaMoedDay)) {
+      const ev1 = ev as HolidayEvent;
+      if (dow === 6 && !sedra && (mask & flags.CHAG || ev1.cholHaMoedDay)) {
         sedra = ev.basename();
       }
       body += `  ${title}\n`;
@@ -451,7 +451,7 @@ function urlEncodeAndTrack(url: string, il?: boolean): string {
     'email',
     'shabbat-weekly',
   );
-  return url.replace(/&/g, '&amp;');
+  return url.replaceAll('&', '&amp;');
 }
 
 function nowrap(s: string): string {
@@ -607,7 +607,7 @@ function makeCandlesCfg(row: RowDataPacket): CandleConfig | null {
   } else if (row.email_candles_geonameid) {
     cfg.geonameid = row.email_candles_geonameid;
   } else if (row.email_candles_city) {
-    cfg.legacyCity = row.email_candles_city.replace(/\+/g, ' ');
+    cfg.legacyCity = row.email_candles_city.replaceAll('+', ' ');
   } else {
     logger.warn(`no geographic key: to=${email}, id=${cfg.id}`);
     return null;
@@ -713,4 +713,13 @@ Options:
   --ini <file>     Use non-default hebcal-dot-com.ini
 `;
   console.log(usage);
+}
+
+try {
+  await main();
+  geoDb.close();
+  logger.info('Success!');
+} catch (err) {
+  logger.fatal(err);
+  process.exit(1);
 }

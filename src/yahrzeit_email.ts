@@ -30,7 +30,7 @@ if (argv.help) {
 }
 
 // allow sleeptime=0 for no sleep
-argv.sleeptime = typeof argv.sleeptime === 'undefined' ? 300 : +argv.sleeptime;
+argv.sleeptime = argv.sleeptime === undefined ? 300 : +argv.sleeptime;
 
 const logger = pino({
   level: getLogLevel(argv),
@@ -57,18 +57,6 @@ const BIRTHDAY_POSTSCRIPT = `${BLANK}\n<div>Mazel Tov! <span lang="he" dir="rtl"
 const DATE_STYLE = 'style="color: #941003; white-space: nowrap"';
 
 let numSent = 0;
-
-main()
-  .then(() => {
-    if (numSent > 0) {
-      logger.info(`Success! Sent ${numSent} messages.`);
-    }
-    logger.debug('Done.');
-  })
-  .catch(err => {
-    logger.fatal(err);
-    process.exit(1);
-  });
 
 /**
  * Sends the message via nodemailer, or no-op for dryrun
@@ -118,7 +106,7 @@ AND e.calendar_id = y.id`;
 
   logger.debug(sql);
   const rows = await db.query(sql);
-  if (!rows || !rows.length) {
+  if (!rows?.length) {
     logger.error('Got zero rows from DB!?');
     await db.close();
     return;
@@ -134,7 +122,7 @@ AND e.calendar_id = y.id`;
     logger.debug(status);
   }
 
-  const calendarIds0 = toSend.map(info => info.calendarId as string);
+  const calendarIds0 = toSend.map(info => info.calendarId);
   const calendarIds = Array.from(new Set(calendarIds0));
   logger.info(`Updating access time for ${calendarIds.length} calendars`);
   for (const calendarId of calendarIds) {
@@ -249,7 +237,7 @@ function makeSubInfo(
   const idNum = `${id}.${num}`;
   const prefix = `${idNum}.${hyear}`;
   for (const key of [prefix, `${prefix}.${info0.hash}`]) {
-    if (typeof sent[key] !== 'undefined') {
+    if (sent[key] !== undefined) {
       logger.debug(`Message for ${key} sent on ${sent[key]}`);
       return false;
     }
@@ -267,10 +255,10 @@ function makeSubInfo(
   const diff = info.diff!;
   if (info.observed && diff >= 0 && diff < maxDays) {
     return info;
-  } else if (!info.observed) {
-    logger.debug(`No anniversary for ${info.anniversaryId}`);
-  } else {
+  } else if (info.observed) {
     logger.debug(`${info.type} ${info.anniversaryId} occurs in ${diff} days`);
+  } else {
+    logger.debug(`No anniversary for ${info.anniversaryId}`);
   }
   return false;
 }
@@ -378,7 +366,7 @@ as the Yahrzeit begins.`
   const hebdate = info.hd!.render('en');
   const origDt = info.day.toDate();
   const nth = calculateAnniversaryNth(origDt, info.hyear);
-  const msgid = `${info.anniversaryId}.${new Date().getTime()}`;
+  const msgid = `${info.anniversaryId}.${Date.now()}`;
   const returnPath = `yahrzeit-return+${info.id}.${info.hash}.${info.num}@hebcal.com`;
   const urlBase = 'https://www.hebcal.com/yahrzeit';
   const editUrl = `${urlBase}/edit/${info.calendarId}?${UTM_PARAM}#form`;
@@ -620,4 +608,15 @@ Options:
   --ini <file>     Use non-default hebcal-dot-com.ini
 `;
   console.log(usage);
+}
+
+try {
+  await main();
+  if (numSent > 0) {
+    logger.info(`Success! Sent ${numSent} messages.`);
+  }
+  logger.debug('Done.');
+} catch (err) {
+  logger.fatal(err);
+  process.exit(1);
 }

@@ -11,7 +11,7 @@ import {Logger} from 'pino';
  * Wraps a MySQL connection in promises
  */
 export class MysqlDb {
-  private connection: Connection;
+  private readonly connection: Connection;
   constructor(logger: Logger, config: ConnectionOptions) {
     const connURL = `mysql://${config.user}@${config.host}:${config.port}/${config.database}`;
     logger.info(`Connecting to ${connURL}`);

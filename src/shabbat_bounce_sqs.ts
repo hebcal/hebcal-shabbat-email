@@ -33,15 +33,6 @@ const sqs = new SQSClient({
 
 const transporter = makeTransporter(config);
 
-main()
-  .then(() => {
-    logger.info('Success!');
-  })
-  .catch(err => {
-    logger.fatal(err);
-    process.exit(1);
-  });
-
 function getStdReason(bounce: any): string {
   if (bounce.bounceSubType && bounce.bounceSubType === 'MailboxFull') {
     return 'over_quota';
@@ -82,7 +73,7 @@ async function readBounceQueue(sqs: SQSClient, db: MysqlDb) {
     logger.debug('Bounces: polling for a batch');
     const command = new ReceiveMessageCommand(params);
     const response = await sqs.send(command);
-    if (!response.Messages || !response.Messages.length) {
+    if (!response.Messages?.length) {
       logger.info('Bounces: done');
       return new Promise((resolve, reject) => {
         bounceLogStream.on('finish', () => resolve(true));
@@ -156,7 +147,7 @@ async function readUnsubQueue(sqs: SQSClient, db: MysqlDb) {
     logger.debug('Unsubscribes: polling for a batch');
     const command = new ReceiveMessageCommand(params);
     const response = await sqs.send(command);
-    if (!response.Messages || !response.Messages.length) {
+    if (!response.Messages?.length) {
       logger.info('Unsubscribes: done');
       return new Promise((resolve, reject) => {
         subsLogStream.on('finish', () => resolve(true));
@@ -175,15 +166,15 @@ async function readUnsubQueue(sqs: SQSClient, db: MysqlDb) {
       if (innerMsg.notificationType === 'Received') {
         let source = innerMsg.mail.source;
         const destination = innerMsg.mail.destination[0];
-        const matches0 =
-          destination &&
-          destination.match(/^shabbat-unsubscribe\+(\w+)@hebcal.com$/);
-        const emailId = matches0 && matches0.length && matches0[1];
+        const matches0 = destination?.match(
+          /^shabbat-unsubscribe\+(\w+)@hebcal\.com$/,
+        );
+        const emailId = matches0?.length && matches0[1];
         const commonHeaders = innerMsg.mail.commonHeaders;
-        if (commonHeaders && commonHeaders.from && commonHeaders.from[0]) {
+        if (commonHeaders?.from?.[0]) {
           const from = commonHeaders.from[0];
-          const matches = from && from.match(/^[^<]*<([^>]+)>/);
-          if (matches && matches.length && matches[1]) {
+          const matches = from?.match(/^[^<]*<([^>]+)>/);
+          if (matches?.length && matches[1]) {
             source = matches[1].toLowerCase();
           }
         }
@@ -235,7 +226,7 @@ async function unsubscribe(
   innerMsg: any,
   logStream: fs.WriteStream,
 ) {
-  const t = Math.floor(new Date().getTime() / 1000);
+  const t = Math.floor(Date.now() / 1000);
   const sql =
     'SELECT email_status,email_id,email_address FROM hebcal_shabbat_email ' +
     (emailId ? 'WHERE email_id = ?' : 'WHERE email_address = ?');
@@ -260,7 +251,7 @@ async function unsubscribe(
       commonHeaders: mail.commonHeaders,
     };
   }
-  if (!rows || !rows.length) {
+  if (!rows?.length) {
     logMessage.code = 'unsub_notfound';
     logStream.write(JSON.stringify(logMessage));
     logStream.write('\n');
@@ -300,4 +291,12 @@ async function main() {
   await readUnsubQueue(sqs, db);
   await readBounceQueue(sqs, db);
   return db.close();
+}
+
+try {
+  await main();
+  logger.info('Success!');
+} catch (err) {
+  logger.fatal(err);
+  process.exit(1);
 }

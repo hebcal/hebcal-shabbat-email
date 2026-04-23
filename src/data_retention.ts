@@ -57,15 +57,6 @@ const retentionMonths = argv.months
   ? parseInt(argv.months, 10)
   : RETENTION_MONTHS_DEFAULT;
 
-main()
-  .then(() => {
-    logger.info('Success!');
-  })
-  .catch(err => {
-    logger.fatal(err);
-    process.exit(1);
-  });
-
 async function main() {
   const db = makeDb(logger, config);
   for (const table of TABLES) {
@@ -158,4 +149,12 @@ Options:
   --months <n>     Retention period in months (default ${RETENTION_MONTHS_DEFAULT})
 `;
   console.log(usage);
+}
+
+try {
+  await main();
+  logger.info('Success!');
+} catch (err) {
+  logger.fatal(err);
+  process.exit(1);
 }

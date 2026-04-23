@@ -25,15 +25,6 @@ const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 let logdir: string;
 
-main()
-  .then(() => {
-    logger.info('Success!');
-  })
-  .catch(err => {
-    logger.fatal(err);
-    process.exit(1);
-  });
-
 async function main() {
   const db = makeDb(logger, config);
   logdir = await dirIfExistsOrCwd('/var/log/hebcal');
@@ -58,7 +49,7 @@ async function deactivateSubs(db: MysqlDb, addrs: string[]) {
   await db.query(sql2);
   return new Promise((resolve, reject) => {
     const subsPath = logdir + '/subscribers.log';
-    const t = Math.floor(new Date().getTime() / 1000);
+    const t = Math.floor(Date.now() / 1000);
     try {
       const logStream = fs.createWriteStream(subsPath, {flags: 'a'});
       addrs.forEach((addr: string) => {
@@ -101,7 +92,7 @@ GROUP by b.email_address,std_reason`;
       addrs.push(row.email_address);
     }
   }
-  return Promise.resolve(addrs);
+  return addrs;
 }
 
 function usage() {
@@ -117,4 +108,12 @@ Options:
   --reasons <r>  Use any of comma-separated list of reasons <r> for bounces (default ${REASONS_DEFAULT})
 `;
   console.log(usage);
+}
+
+try {
+  await main();
+  logger.info('Success!');
+} catch (err) {
+  logger.fatal(err);
+  process.exit(1);
 }

@@ -14,15 +14,6 @@ const logger = pino({
   level: argv.verbose ? 'debug' : argv.quiet ? 'warn' : 'info',
 });
 
-main()
-  .then(() => {
-    logger.info('Success!');
-  })
-  .catch(err => {
-    logger.fatal(err);
-    process.exit(1);
-  });
-
 async function main() {
   const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
   logger.info(`Reading ${iniPath}...`);
@@ -64,4 +55,12 @@ async function loadSubs(iniConfig) {
     await db.query(sql4);
   }
   await db.close();
+}
+
+try {
+  await main();
+  logger.info('Success!');
+} catch (err) {
+  logger.fatal(err);
+  process.exit(1);
 }

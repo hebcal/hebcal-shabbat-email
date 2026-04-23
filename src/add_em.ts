@@ -4,7 +4,6 @@ import minimist from 'minimist';
 import pino from 'pino';
 import {getLogLevel} from './common.js';
 import {makeDb, MysqlDb} from './makedb.js';
-import {pad4, pad2} from '@hebcal/rest-api';
 
 const argv = minimist(process.argv.slice(2), {
   string: ['ini'],
@@ -15,15 +14,6 @@ const logger = pino({
 });
 
 let db: MysqlDb;
-
-main()
-  .then(() => {
-    logger.info('Done.');
-  })
-  .catch(err => {
-    logger.fatal(err);
-    process.exit(1);
-  });
 
 type RawYahrzeitContents = {
   [s: string]: string | number;
@@ -94,9 +84,9 @@ function compactJsonItem(
   const mm = obj[mk];
   const dd = obj[dk];
   if (!empty(dd) && !empty(mm) && !empty(yy)) {
-    const yy4 = yy.length === 4 ? yy : pad4(+yy);
-    const mm2 = mm.length === 2 ? mm : pad2(+mm);
-    const dd2 = dd.length === 2 ? dd : pad2(+dd);
+    const yy4 = yy.length === 4 ? yy : String(+yy).padStart(4, '0');
+    const mm2 = mm.length === 2 ? mm : String(+mm).padStart(2, '0');
+    const dd2 = dd.length === 2 ? dd : String(+dd).padStart(2, '0');
     obj['x' + num] = yy4 + '-' + mm2 + '-' + dd2;
     delete obj[yk];
     delete obj[mk];
@@ -109,7 +99,7 @@ function compactJsonItem(
   }
   const sunsetKey = 's' + num;
   const sunset = obj[sunsetKey];
-  if (typeof sunset !== 'undefined') {
+  if (sunset !== undefined) {
     obj[sunsetKey] = sunset === 'on' || +sunset === 1 ? 1 : 0;
   }
 }
@@ -173,4 +163,12 @@ AND e.calendar_id = y.id`;
   }
 
   await db.close();
+}
+
+try {
+  await main();
+  logger.info('Done.');
+} catch (err) {
+  logger.fatal(err);
+  process.exit(1);
 }
