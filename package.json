@@ -3,7 +3,7 @@
   "version": "4.2.0",
   "description": "Weekly shabbat times email subscription management for hebcal.com",
   "engines": {
-    "node": ">= 20.0.0"
+    "node": ">= 22.5.0"
   },
   "type": "module",
   "scripts": {
@@ -46,7 +46,6 @@
     "@hebcal/hdate": "^0.22.1",
     "@hebcal/icalendar": "^6.3.7",
     "@hebcal/rest-api": "^6.4.7",
-    "better-sqlite3": "^12.9.0",
     "csv-parse": "^6.2.1",
     "dayjs": "^1.11.20",
     "fs-ext": "^2.1.1",
