@@ -161,15 +161,23 @@ type RawYahrzeitContents = {
   [s: string]: string | number;
 };
 
-async function loadSubsFromDb(
-  rows: RowDataPacket[],
-  optout: StringDateMap,
-): Promise<SubInfo[]> {
+/**
+ * Returns an array of either 1 or 2 Hebrew years to consider for anniversaries.
+ */
+function getThisHebrewYear(): number[] {
   const htoday = new HDate(today.toDate());
   const hyears = [htoday.getFullYear()];
   if (htoday.getMonth() === months.ELUL) {
     hyears.push(hyears[0] + 1);
   }
+  return hyears;
+}
+
+async function loadSubsFromDb(
+  rows: RowDataPacket[],
+  optout: StringDateMap,
+): Promise<SubInfo[]> {
+  const hyears = getThisHebrewYear();
   const sent7 = await loadRecentSent('yahrzeit_sent7');
   const sent1 = await loadRecentSent('yahrzeit_sent1');
 
