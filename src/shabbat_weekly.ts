@@ -175,7 +175,7 @@ type CandleConfig = {
   id: string;
   email: string;
   m: number;
-  M: boolean;
+  M: number | null;
   b: number;
   ue: boolean;
   zip?: string;
@@ -311,7 +311,7 @@ let prevCfg: CandleConfig = {
   id: '',
   email: '',
   m: -1,
-  M: false,
+  M: null,
   b: -1,
   ue: false,
   location: dummyLocation,
@@ -345,6 +345,8 @@ function getSubjectAndBody(cfg: CandleConfig): string[] {
   };
   if (typeof cfg.m === 'number') {
     options.havdalahMins = cfg.m;
+  } else if (typeof cfg.M === 'number') {
+    options.havdalahDeg = cfg.M;
   }
   const events = HebrewCalendar.calendar(options);
   const subjAndBody = genSubjectAndBody(events, options, cfg);
@@ -490,8 +492,8 @@ function getSpecialNote(cfg: CandleConfig, isHTML: boolean): string {
     let url = `https://www.hebcal.com/shabbat/fridge.cgi?${fridgeLoc}&b=${cfg.b}&year=${nextYear}`;
     if (cfg.m) {
       url += `&m=${cfg.m}`;
-    } else if (cfg.M) {
-      url += '&M=on';
+    } else if (cfg.M !== null) {
+      url += `&M=on&td=${cfg.M}`;
     }
     url = urlEncodeAndTrack(url);
     const rhNameSpan = nowrap(`Rosh Hashana ${nextYear}`);
@@ -572,7 +574,7 @@ async function loadSubs(
        email_candles_geonameid,
        email_use_elevation,
        email_candles_havdalah,
-       email_havdalah_tzeit,
+       email_havdalah_degrees,
        email_sundown_candles
 FROM hebcal_shabbat_email
 WHERE email_status = 'active'
@@ -597,7 +599,10 @@ function makeCandlesCfg(row: RowDataPacket): CandleConfig | null {
     id: row.email_id,
     email: email,
     m: row.email_candles_havdalah,
-    M: Boolean(row.email_havdalah_tzeit),
+    M:
+      row.email_havdalah_degrees === null
+        ? null
+        : Number(row.email_havdalah_degrees),
     b: row.email_sundown_candles,
     ue: Boolean(row.email_use_elevation),
     location: dummyLocation,
