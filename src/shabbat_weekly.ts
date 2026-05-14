@@ -175,7 +175,7 @@ type CandleConfig = {
   id: string;
   email: string;
   m: number;
-  M: number | null;
+  td: number | null;
   b: number;
   ue: boolean;
   zip?: string;
@@ -311,7 +311,7 @@ let prevCfg: CandleConfig = {
   id: '',
   email: '',
   m: -1,
-  M: null,
+  td: null,
   b: -1,
   ue: false,
   location: dummyLocation,
@@ -325,7 +325,7 @@ function getSubjectAndBody(cfg: CandleConfig): string[] {
   const location = cfg.location;
   if (
     cfg.m === prevCfg.m &&
-    cfg.M === prevCfg.M &&
+    cfg.td === prevCfg.td &&
     cfg.b === prevCfg.b &&
     cfg.ue === prevCfg.ue &&
     location.getGeoId() === prevCfg.location.getGeoId()
@@ -345,8 +345,8 @@ function getSubjectAndBody(cfg: CandleConfig): string[] {
   };
   if (typeof cfg.m === 'number') {
     options.havdalahMins = cfg.m;
-  } else if (typeof cfg.M === 'number') {
-    options.havdalahDeg = cfg.M;
+  } else if (typeof cfg.td === 'number') {
+    options.havdalahDeg = cfg.td;
   }
   const events = HebrewCalendar.calendar(options);
   const subjAndBody = genSubjectAndBody(events, options, cfg);
@@ -492,8 +492,8 @@ function getSpecialNote(cfg: CandleConfig, isHTML: boolean): string {
     let url = `https://www.hebcal.com/shabbat/fridge.cgi?${fridgeLoc}&b=${cfg.b}&year=${nextYear}`;
     if (cfg.m) {
       url += `&m=${cfg.m}`;
-    } else if (cfg.M !== null) {
-      url += `&M=on&td=${cfg.M}`;
+    } else if (cfg.td !== null) {
+      url += `&M=on&td=${cfg.td}`;
     }
     url = urlEncodeAndTrack(url);
     const rhNameSpan = nowrap(`Rosh Hashana ${nextYear}`);
@@ -599,7 +599,7 @@ function makeCandlesCfg(row: RowDataPacket): CandleConfig | null {
     id: row.email_id,
     email: email,
     m: row.email_candles_havdalah,
-    M:
+    td:
       row.email_havdalah_degrees === null
         ? null
         : Number(row.email_havdalah_degrees),
