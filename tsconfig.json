@@ -11,6 +11,7 @@
     "composite": false,
     "declaration": false,
     "strict": true,
+    "skipLibCheck": true,
     "paths": {
       "*": ["./types/*"]
     }
