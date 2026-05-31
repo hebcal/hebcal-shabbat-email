@@ -54,7 +54,7 @@ const logger = pino({
 const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
 const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
 const retentionMonths = argv.months
-  ? parseInt(argv.months, 10)
+  ? Number.parseInt(argv.months, 10)
   : RETENTION_MONTHS_DEFAULT;
 
 async function main() {

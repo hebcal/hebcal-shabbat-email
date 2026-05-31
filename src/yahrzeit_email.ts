@@ -343,6 +343,19 @@ async function processAnniversary(info: SubInfo): Promise<unknown> {
   return status;
 }
 
+/**
+ * Return candle lighting time description based on day of week
+ */
+function lightCandlesWhen(dow: number): string {
+  if (dow === 5) {
+    return 'before sundown';
+  } else if (dow === 6) {
+    return 'at nightfall';
+  } else {
+    return 'at dusk';
+  }
+}
+
 function makeMessage(info: SubInfo): nodemailer.SendMailOptions {
   const type = info.type;
   const isYahrzeit = Boolean(type === 'Yahrzeit');
@@ -364,8 +377,7 @@ function makeMessage(info: SubInfo): nodemailer.SendMailOptions {
       : '';
   const erev = observed.subtract(1, 'day');
   const dow = erev.day();
-  const when =
-    dow === 5 ? 'before sundown' : dow === 6 ? 'after nightfall' : 'at sundown';
+  const when = lightCandlesWhen(dow);
   const lightCandle = isYahrzeit
     ? ` It is customary to light a memorial candle ${when} on
 <time datetime="${erev.format('YYYY-MM-DD')}" ${DATE_STYLE}>${erev.format('dddd, MMMM D')}</time>
@@ -496,7 +508,7 @@ function empty(val: unknown): boolean {
 }
 
 function isNumKey(k: string): boolean {
-  const code = k.charCodeAt(1);
+  const code = k.codePointAt(1)!;
   return code >= 48 && code <= 57;
 }
 
@@ -547,9 +559,9 @@ function getYahrzeitDetailForId(
   if (empty(dd) || empty(mm) || empty(yy)) {
     return null;
   }
-  const year = parseInt(yy, 10);
-  const month = parseInt(mm, 10);
-  const mday = parseInt(dd, 10);
+  const year = Number.parseInt(yy, 10);
+  const month = Number.parseInt(mm, 10);
+  const mday = Number.parseInt(dd, 10);
   if (!mday || !month || !year) {
     logger.warn(query, `Invalid date for entry ${num}`);
     return null;
