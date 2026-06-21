@@ -15,7 +15,6 @@ import dayjs from 'dayjs';
 import fs from 'node:fs';
 import {flock} from 'fs-ext';
 import {htmlToText} from 'html-to-text';
-import ini from 'ini';
 import minimist from 'minimist';
 import nodemailer from 'nodemailer';
 import pino from 'pino';
@@ -24,6 +23,7 @@ import {
   htmlToTextOptions,
   makeTransporter,
   msleep,
+  readIniConfig,
   shouldSendEmailToday,
 } from './common.js';
 import {dirIfExistsOrCwd, makeDb} from './makedb.js';
@@ -74,9 +74,8 @@ const geoDb = new GeoDb(null, 'zips.sqlite3', 'geonames.sqlite3');
  * Main event loop
  */
 async function main() {
-  const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
-  logger.info(`Reading ${iniPath}...`);
-  const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
+  logger.info(`Reading ${argv.ini || 'default config'}...`);
+  const config = readIniConfig(argv.ini);
   const subs = await loadSubs(config, argv._);
   logger.info(`Loaded ${subs.size} users`);
 

@@ -1,9 +1,8 @@
 /* global process */
 import minimist from 'minimist';
 import pino from 'pino';
-import fs from 'node:fs';
-import ini from 'ini';
 import {makeDb} from './makedb.js';
+import {readIniConfig} from './common.js';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['dryrun', 'quiet', 'force', 'verbose'],
@@ -15,9 +14,8 @@ const logger = pino({
 });
 
 async function main() {
-  const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
-  logger.info(`Reading ${iniPath}...`);
-  const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
+  logger.info(`Reading ${argv.ini || 'default config'}...`);
+  const config = readIniConfig(argv.ini);
   await loadSubs(config);
 }
 

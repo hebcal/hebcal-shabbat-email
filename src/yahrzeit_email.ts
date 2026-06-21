@@ -1,6 +1,4 @@
 import dayjs, {Dayjs} from 'dayjs';
-import fs from 'node:fs';
-import ini from 'ini';
 import {HDate, months, getYahrzeitHD, getBirthdayHD} from '@hebcal/hdate';
 import {Event, flags, Locale} from '@hebcal/core';
 import pino from 'pino';
@@ -13,6 +11,7 @@ import {
   makeTransporter,
   htmlToTextOptions,
   msleep,
+  readIniConfig,
 } from './common.js';
 import {IcalEvent} from '@hebcal/icalendar';
 import {murmur32HexSync} from 'murmurhash3';
@@ -84,9 +83,8 @@ type StringDateMap = {
  * Main event loop
  */
 async function main() {
-  const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
-  logger.debug(`Reading ${iniPath}...`);
-  const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
+  logger.debug(`Reading ${argv.ini || 'default config'}...`);
+  const config = readIniConfig(argv.ini);
 
   db = makeDb(logger, config);
   if (!argv.dryrun) {
@@ -100,12 +98,14 @@ async function main() {
 FROM yahrzeit_email e, yahrzeit y
 WHERE e.sub_status = 'active'
 AND e.calendar_id = y.id`;
+  const params: string[] = [];
   if (argv.email) {
-    sql += ` AND e.email_addr = '${argv.email}'`;
+    sql += ' AND e.email_addr = ?';
+    params.push(argv.email);
   }
 
   logger.debug(sql);
-  const rows = await db.query(sql);
+  const rows = await db.query(sql, params);
   if (!rows?.length) {
     logger.error('Got zero rows from DB!?');
     await db.close();

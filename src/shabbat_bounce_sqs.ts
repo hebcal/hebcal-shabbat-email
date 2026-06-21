@@ -4,10 +4,14 @@ import {
   SQSClient,
 } from '@aws-sdk/client-sqs';
 import fs from 'node:fs';
-import ini from 'ini';
 import minimist from 'minimist';
 import pino from 'pino';
-import {getLogLevel, makeTransporter, translateSmtpStatus} from './common.js';
+import {
+  getLogLevel,
+  makeTransporter,
+  readIniConfig,
+  translateSmtpStatus,
+} from './common.js';
 import {dirIfExistsOrCwd, makeDb, MysqlDb} from './makedb.js';
 
 const argv = minimist(process.argv.slice(2), {
@@ -18,8 +22,7 @@ const argv = minimist(process.argv.slice(2), {
 const logger = pino({
   level: getLogLevel(argv),
 });
-const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
-const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
+const config = readIniConfig(argv.ini);
 
 let logdir: string;
 

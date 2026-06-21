@@ -1,5 +1,8 @@
 import {Event, flags, HDate, HebrewCalendar} from '@hebcal/core';
 import {Dayjs} from 'dayjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import ini from 'ini';
 import minimist from 'minimist';
 import nodemailer from 'nodemailer';
 
@@ -7,6 +10,24 @@ export function getLogLevel(argv: minimist.ParsedArgs): string {
   if (argv.verbose) return 'debug';
   if (argv.quiet) return 'warn';
   return 'info';
+}
+
+const DEFAULT_INI_PATH = '/etc/hebcal-dot-com.ini';
+
+/**
+ * Reads and parses the INI config file shared by these CLI jobs.
+ *
+ * The path may be supplied via the operator-controlled `--ini` flag. We
+ * normalize it and reject embedded null bytes as defense-in-depth against
+ * path injection before handing it to the filesystem.
+ */
+export function readIniConfig(iniPath?: string) {
+  const candidate = iniPath || DEFAULT_INI_PATH;
+  if (candidate.includes('\0')) {
+    throw new Error(`Invalid ini path: ${candidate}`);
+  }
+  const normalized = path.resolve(candidate);
+  return ini.parse(fs.readFileSync(normalized, 'utf-8'));
 }
 
 export const htmlToTextOptions = {

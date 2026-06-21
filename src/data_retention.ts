@@ -1,9 +1,7 @@
-import fs from 'node:fs';
-import ini from 'ini';
 import pino from 'pino';
 import minimist from 'minimist';
 import {makeDb, MysqlDb} from './makedb.js';
-import {getLogLevel} from './common.js';
+import {getLogLevel, readIniConfig} from './common.js';
 
 const PROG = 'data_retention.js';
 const RETENTION_MONTHS_DEFAULT = 24;
@@ -51,8 +49,7 @@ if (argv.help) {
 const logger = pino({
   level: getLogLevel(argv),
 });
-const iniPath = argv.ini || '/etc/hebcal-dot-com.ini';
-const config = ini.parse(fs.readFileSync(iniPath, 'utf-8'));
+const config = readIniConfig(argv.ini);
 const retentionMonths = argv.months
   ? Number.parseInt(argv.months, 10)
   : RETENTION_MONTHS_DEFAULT;
