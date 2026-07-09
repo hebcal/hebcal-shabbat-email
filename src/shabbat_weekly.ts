@@ -640,11 +640,11 @@ function loadSentLog(sentLogFilename: string): Set<string> {
   return result;
 }
 
-function getLocation(cfg: CandleConfig): Location | undefined {
+function getLocation(cfg: CandleConfig): Location | null {
   if (cfg.zip) return geoDb.lookupZip(cfg.zip);
   if (cfg.geonameid) return geoDb.lookupGeoname(cfg.geonameid);
   if (cfg.legacyCity) return geoDb.lookupLegacyCity(cfg.legacyCity);
-  return undefined;
+  return null;
 }
 
 /**
