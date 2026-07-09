@@ -1,11 +1,14 @@
 {
-  "extends": "./node_modules/gts/tsconfig-google.json",
   "compilerOptions": {
     "module": "es2022",
     "rootDir": "./src",
     "outDir": "dist",
     "esModuleInterop": true,
     "target": "es2023",
+    "strict": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "sourceMap": false,
     "moduleResolution": "bundler",
     "composite": false,
