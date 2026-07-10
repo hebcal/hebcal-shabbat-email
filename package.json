@@ -60,5 +60,9 @@
     "nodemailer": "^9.0.3",
     "nodemailer-html-to-text": "^3.2.0",
     "pino": "^10.3.1"
+  },
+  "allowScripts": {
+    "fs-ext": true,
+    "murmurhash3": true
   }
 }
