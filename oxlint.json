@@ -1,0 +1,15 @@
+{
+  "env": {
+    "node": true,
+    "es2024": true
+  },
+  "settings": {
+    "import/resolver": {
+      "typescript": true,
+      "node": true
+    }
+  },
+  "rules": {
+    "suspicious/no-explicit-any": "warn"
+  }
+}

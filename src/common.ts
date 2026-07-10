@@ -43,9 +43,7 @@ export const htmlToTextOptions = {
 /**
  * create reusable transporter object using the default SMTP transport
  */
-export function makeTransporter(iniConfig: {
-  [s: string]: string;
-}): nodemailer.Transporter {
+export function makeTransporter(iniConfig: {[s: string]: string}): nodemailer.Transporter {
   return nodemailer.createTransport({
     host: iniConfig['hebcal.email.shabbat.host'],
     port: 465,
@@ -82,10 +80,7 @@ export function shouldSendEmailToday(today: Dayjs): boolean {
       return Boolean(getChagOnDate(today.add(1, 'day')));
     case 2:
       // send email today (Tuesday) because Wed & Thurs are both yontiff
-      return Boolean(
-        getChagOnDate(today.add(1, 'day')) &&
-        getChagOnDate(today.add(2, 'day')),
-      );
+      return Boolean(getChagOnDate(today.add(1, 'day')) && getChagOnDate(today.add(2, 'day')));
     default:
       // no email today - not Tue/Wed/Thu
       return false;

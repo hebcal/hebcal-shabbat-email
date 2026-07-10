@@ -50,9 +50,7 @@ const logger = pino({
   level: getLogLevel(argv),
 });
 const config = readIniConfig(argv.ini);
-const retentionMonths = argv.months
-  ? Number.parseInt(argv.months, 10)
-  : RETENTION_MONTHS_DEFAULT;
+const retentionMonths = argv.months ? Number.parseInt(argv.months, 10) : RETENTION_MONTHS_DEFAULT;
 
 async function main() {
   const db = makeDb(logger, config);
@@ -95,9 +93,7 @@ async function pruneInactiveSubscribers(db: MysqlDb, tbl: InactiveTable) {
   const countSql = `SELECT COUNT(*) AS cnt FROM ${table} WHERE ${whereClause}`;
   const countResult = await db.query(countSql, statuses);
   const count = (countResult[0] as any).cnt;
-  logger.info(
-    `${table}: ${count} inactive rows older than ${retentionMonths} months`,
-  );
+  logger.info(`${table}: ${count} inactive rows older than ${retentionMonths} months`);
   if (count === 0) {
     return;
   }
@@ -114,12 +110,7 @@ async function pruneInactiveSubscribers(db: MysqlDb, tbl: InactiveTable) {
   await batchDelete(db, table, deleteSql, statuses);
 }
 
-async function batchDelete(
-  db: MysqlDb,
-  table: string,
-  deleteSql: string,
-  params?: string[],
-) {
+async function batchDelete(db: MysqlDb, table: string, deleteSql: string, params?: string[]) {
   let totalDeleted = 0;
   let affected = 0;
   do {

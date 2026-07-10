@@ -6,8 +6,7 @@ import {getLogLevel, readIniConfig} from './common.js';
 
 const PROG = 'shabbat_deactivate.js';
 const COUNT_DEFAULT = 7;
-const REASONS_DEFAULT =
-  'amzn_abuse,user_unknown,user_disabled,domain_error,spam';
+const REASONS_DEFAULT = 'amzn_abuse,user_unknown,user_disabled,domain_error,spam';
 
 const argv = minimist(process.argv.slice(2));
 if (argv.help || argv.h) {

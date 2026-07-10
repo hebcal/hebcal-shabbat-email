@@ -173,10 +173,7 @@ function getThisHebrewYear(): number[] {
   return hyears;
 }
 
-async function loadSubsFromDb(
-  rows: RowDataPacket[],
-  optout: StringDateMap,
-): Promise<SubInfo[]> {
+async function loadSubsFromDb(rows: RowDataPacket[], optout: StringDateMap): Promise<SubInfo[]> {
   const hyears = getThisHebrewYear();
   const sent7 = await loadRecentSent('yahrzeit_sent7');
   const sent1 = await loadRecentSent('yahrzeit_sent1');
@@ -217,11 +214,7 @@ async function loadSubsFromDb(
   return toSend;
 }
 
-function skipOptOut(
-  subscriptionId: string,
-  info: SubBase,
-  optout: StringDateMap,
-) {
+function skipOptOut(subscriptionId: string, info: SubBase, optout: StringDateMap) {
   const num = info.num;
   const idNum = `${subscriptionId}.${num}`;
   for (const key of [idNum, `${idNum}.${info.hash}`]) {
@@ -239,7 +232,7 @@ function makeSubInfo(
   info0: SubBase,
   hyear: number,
   sent: StringDateMap,
-  maxDays: number,
+  maxDays: number
 ): SubInfo | false {
   const id = contents.id;
   const idNum = `${id}.${num}`;
@@ -272,8 +265,7 @@ function makeSubInfo(
 }
 
 async function loadOptOut(): Promise<StringDateMap> {
-  const sql =
-    'SELECT email_id, name_hash, num, updated FROM yahrzeit_optout WHERE deactivated = 1';
+  const sql = 'SELECT email_id, name_hash, num, updated FROM yahrzeit_optout WHERE deactivated = 1';
   logger.debug(sql);
   const rows = await db.query(sql);
   logger.info(`Loaded ${rows.length} opt_out from DB`);
@@ -306,9 +298,7 @@ function computeAnniversary(info: SubInfo) {
   const hyear = info.hyear;
   const origDt = info.day.toDate();
   const hd0 =
-    info.type === 'Yahrzeit'
-      ? getYahrzeitHD(hyear, origDt)
-      : getBirthdayHD(hyear, origDt);
+    info.type === 'Yahrzeit' ? getYahrzeitHD(hyear, origDt) : getBirthdayHD(hyear, origDt);
   if (hd0) {
     const hd = new HDate(hd0);
     const observed = (info.observed = dayjs(hd.greg()));
@@ -361,11 +351,7 @@ function makeMessage(info: SubInfo): nodemailer.SendMailOptions {
   const isYahrzeit = Boolean(type === 'Yahrzeit');
   const isOther = type === 'Other';
   const UTM_PARAM = `utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=${type.toLowerCase()}-reminder`;
-  const typeStr = isYahrzeit
-    ? type
-    : isOther
-      ? 'Hebrew Anniversary'
-      : `Hebrew ${type}`;
+  const typeStr = isYahrzeit ? type : isOther ? 'Hebrew Anniversary' : `Hebrew ${type}`;
   const observed = info.observed as Dayjs;
   const subject = makeSubject(typeStr, observed);
   logger.info(`${info.anniversaryId} - ${info.diff} days - ${subject}`);
@@ -435,26 +421,21 @@ ${imgOpen}
     const dt = erev.toDate();
     const dow = erev.day();
     const eventTimeStr = dow === 6 ? '20:00' : dow === 5 ? '14:30' : '16:30';
-    const ev = new Event(
-      new HDate(dt),
-      `${info.name} ${typeStr} reminder`,
-      flags.USER_EVENT,
-      {
-        eventTime: dt,
-        eventTimeStr,
-        memo:
-          `Hebcal joins you in ${verb} ${info.name}, whose ${nth} ${typeStr} occurs on ` +
-          `${observed.format('dddd, MMMM D')}, corresponding to the ${hebdate}.\\n\\n` +
-          `${typeStr} begins at sundown on ${erev.format('dddd, MMMM D')} and continues until ` +
-          'sundown on the day of observance. ' +
-          `It is customary to light a memorial candle ${when} as the Yahrzeit begins.\\n\\n` +
-          'May your loved one’s soul be bound up in the bond of eternal life and may their memory ' +
-          'serve as a continued source of inspiration and comfort to you.',
-        alarm: 'P0DT0H0M0S',
-        uid: `reminder-${info.anniversaryId}`,
-        category: 'Personal',
-      },
-    );
+    const ev = new Event(new HDate(dt), `${info.name} ${typeStr} reminder`, flags.USER_EVENT, {
+      eventTime: dt,
+      eventTimeStr,
+      memo:
+        `Hebcal joins you in ${verb} ${info.name}, whose ${nth} ${typeStr} occurs on ` +
+        `${observed.format('dddd, MMMM D')}, corresponding to the ${hebdate}.\\n\\n` +
+        `${typeStr} begins at sundown on ${erev.format('dddd, MMMM D')} and continues until ` +
+        'sundown on the day of observance. ' +
+        `It is customary to light a memorial candle ${when} as the Yahrzeit begins.\\n\\n` +
+        'May your loved one’s soul be bound up in the bond of eternal life and may their memory ' +
+        'serve as a continued source of inspiration and comfort to you.',
+      alarm: 'P0DT0H0M0S',
+      uid: `reminder-${info.anniversaryId}`,
+      category: 'Personal',
+    });
     const ical = new IcalEvent(ev, {});
     const lines =
       [
@@ -520,10 +501,7 @@ function getMaxYahrzeitId(query: RawYahrzeitContents): number {
       let id = +k.substring(1);
       if (empty(query[k])) {
         id = 0;
-      } else if (
-        k0 === 'y' &&
-        (empty(query['d' + id]) || empty(query['m' + id]))
-      ) {
+      } else if (k0 === 'y' && (empty(query['d' + id]) || empty(query['m' + id]))) {
         id = 0;
       }
       if (id > max) {
@@ -551,10 +529,7 @@ function getAnniversaryType(str: string): string {
   return 'Yahrzeit';
 }
 
-function getYahrzeitDetailForId(
-  query: RawYahrzeitContents,
-  num: number,
-): SubBase | null {
+function getYahrzeitDetailForId(query: RawYahrzeitContents, num: number): SubBase | null {
   const {yy, mm, dd} = getDateForId(query, num);
   if (empty(dd) || empty(mm) || empty(yy)) {
     return null;
@@ -577,11 +552,7 @@ function getYahrzeitDetailForId(
   return {num, dd, mm, yy, sunset, type, name, day, hash};
 }
 
-function getAnniversaryName(
-  query: RawYahrzeitContents,
-  id: number,
-  type: string,
-): string {
+function getAnniversaryName(query: RawYahrzeitContents, id: number, type: string): string {
   const str = query[`n${id}`];
   const name0 = typeof str === 'string' ? str.trim() : undefined;
   if (name0) {
