@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import pino from 'pino';
 import minimist from 'minimist';
-import {makeDb, dirIfExistsOrCwd, MysqlDb} from './makedb.js';
+import {LOGDIR, makeDb, dirIfExistsOrCwd, MysqlDb} from './makedb.js';
 import {getLogLevel, readIniConfig} from './common.js';
 
 const PROG = 'shabbat_deactivate.js';
@@ -24,7 +24,7 @@ let logdir: string;
 
 async function main() {
   const db = makeDb(logger, config);
-  logdir = await dirIfExistsOrCwd('/var/log/hebcal');
+  logdir = await dirIfExistsOrCwd(LOGDIR);
   const addrs = await getCandidates(db);
   logger.info(`Deactivating ${addrs.length} subscriptions`);
   if (!argv.dryrun && addrs.length) {

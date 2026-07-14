@@ -26,7 +26,7 @@ import {
   readIniConfig,
   shouldSendEmailToday,
 } from './common.js';
-import {dirIfExistsOrCwd, makeDb} from './makedb.js';
+import {LOGDIR, dirIfExistsOrCwd, makeDb} from './makedb.js';
 import {RowDataPacket} from 'mysql2';
 
 const argv = minimist(process.argv.slice(2), {
@@ -68,7 +68,7 @@ async function main() {
   const subs = await loadSubs(config, argv._);
   logger.info(`Loaded ${subs.size} users`);
 
-  const logdir = await dirIfExistsOrCwd('/var/log/hebcal');
+  const logdir = await dirIfExistsOrCwd(LOGDIR);
   const dow = TODAY0.day();
   const friday = TODAY0.add(5 - dow, 'day');
   const sentLogFilename = logdir + '/shabbat-' + friday.format('YYYYMMDD');

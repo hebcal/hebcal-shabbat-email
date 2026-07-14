@@ -1,6 +1,6 @@
 {
   "name": "hebcal-shabbat-email",
-  "version": "4.3.0",
+  "version": "4.3.1",
   "description": "Weekly shabbat times email subscription management for hebcal.com",
   "engines": {
     "node": ">= 24"
@@ -43,7 +43,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@aws-sdk/client-sqs": "^3.1084.0",
+    "@aws-sdk/client-sqs": "^3.1086.0",
     "@hebcal/core": "^6.6.0",
     "@hebcal/geo-sqlite": "^5.12.0",
     "@hebcal/hdate": "^0.22.5",

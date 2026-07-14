@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import mysql, {Connection, ConnectionOptions, QueryOptions, RowDataPacket} from 'mysql2';
 import {Logger} from 'pino';
 
+export const LOGDIR = '/var/log/hebcal/email';
+
 /**
  * Wraps a MySQL connection in promises
  */

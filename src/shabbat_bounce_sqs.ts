@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import minimist from 'minimist';
 import pino from 'pino';
 import {getLogLevel, makeTransporter, readIniConfig, translateSmtpStatus} from './common.js';
-import {dirIfExistsOrCwd, makeDb, MysqlDb} from './makedb.js';
+import {LOGDIR, dirIfExistsOrCwd, makeDb, MysqlDb} from './makedb.js';
 
 const argv = minimist(process.argv.slice(2), {
   boolean: ['quiet', 'verbose'],
@@ -265,7 +265,7 @@ async function unsubscribe(
 
 async function main() {
   const db = makeDb(logger, config);
-  logdir = await dirIfExistsOrCwd('/var/log/hebcal');
+  logdir = await dirIfExistsOrCwd(LOGDIR);
   await readUnsubQueue(sqs, db);
   await readBounceQueue(sqs, db);
   return db.close();
