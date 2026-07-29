@@ -62,7 +62,6 @@
     "pino": "^10.3.1"
   },
   "allowScripts": {
-    "fs-ext": true,
-    "murmurhash3": true
+    "fs-ext": true
   }
 }
