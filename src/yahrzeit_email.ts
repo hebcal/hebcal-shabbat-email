@@ -14,7 +14,7 @@ import {
   readIniConfig,
 } from './common.js';
 import {IcalEvent} from '@hebcal/icalendar';
-import {murmur32HexSync} from 'murmurhash3';
+import {murmur32HexSync} from '@hebcal/murmurhash3';
 import {htmlToText} from 'nodemailer-html-to-text';
 import {RowDataPacket} from 'mysql2';
 
