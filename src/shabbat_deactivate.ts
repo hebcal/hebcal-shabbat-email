@@ -80,8 +80,7 @@ GROUP by b.email_address,std_reason`;
   logger.info(sql);
   const results = await db.query(sql);
   const addrs: string[] = [];
-  for (const row0 of results) {
-    const row = row0 as any;
+  for (const row of results) {
     if (row.count > argv.count || row.std_reason === 'amzn_abuse') {
       if (!argv.quiet) {
         logger.info(`${row.email_address} (${row.count} bounces)`);
