@@ -108,9 +108,11 @@ npm run fix       # oxlint --fix + prettier --write
 ## Deployment (example cron)
 
 The compiled scripts run from cron on the mailer host. The times below are in
-the server's local time zone. Scripts that `cd $APPDIR` first do so to resolve
-files relative to the app directory (e.g. `shabbat_weekly.js` loads its bundled
-geonames/zip SQLite databases from the working directory).
+the server's local time zone. Only `shabbat_weekly.js` cares about the working
+directory — it loads its bundled `zips.sqlite3` / `geonames.sqlite3` databases
+by relative path — so it's the one job that needs to `cd $APPDIR` first. The
+rest resolve everything by absolute path (the INI file, `/var/log/hebcal-email`,
+and Node's own `node_modules`), so they can run from anywhere.
 
 ```cron
 SHELL=/bin/sh
@@ -131,8 +133,8 @@ APPDIR=/home/hebcal/hebcal-shabbat-email
 */5 * * * * hebcal node $APPDIR/dist/shabbat_bounce_sqs.js --quiet
 
 # Yahrzeit & anniversary reminders, Sun–Fri at 8:31am.
-31 8 * * 0-5 hebcal cd $APPDIR && node $APPDIR/dist/yahrzeit_email.js --quiet --localhost
+31 8 * * 0-5 hebcal node $APPDIR/dist/yahrzeit_email.js --quiet --localhost
 
 # Data-retention purge, nightly at 11:47pm.
-47 23 * * * hebcal cd $APPDIR && nice node $APPDIR/dist/data_retention.js --quiet
+47 23 * * * hebcal nice node $APPDIR/dist/data_retention.js --quiet
 ```
