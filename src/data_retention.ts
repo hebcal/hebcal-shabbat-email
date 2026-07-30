@@ -1,5 +1,6 @@
 import pino from 'pino';
 import minimist from 'minimist';
+import {ResultSetHeader} from 'mysql2';
 import {makeDb, MysqlDb} from './makedb.js';
 import {getLogLevel, readIniConfig} from './common.js';
 
@@ -67,7 +68,7 @@ async function pruneTable(db: MysqlDb, table: string, column: string) {
   const fromWhereSql = `FROM ${table} WHERE ${column} < DATE_SUB(NOW(), INTERVAL ${retentionMonths} MONTH)`;
   const countSql = `SELECT COUNT(*) AS cnt ${fromWhereSql}`;
   const countResult = await db.query(countSql);
-  const count = (countResult[0] as any).cnt;
+  const count = countResult[0].cnt;
   logger.info(`${table}: ${count} rows older than ${retentionMonths} months`);
   if (count === 0) {
     return;
@@ -92,7 +93,7 @@ async function pruneInactiveSubscribers(db: MysqlDb, tbl: InactiveTable) {
   const whereClause = `${tbl.dateColumn} < DATE_SUB(NOW(), INTERVAL ${retentionMonths} MONTH) AND ${tbl.statusColumn} IN (${placeholders})`;
   const countSql = `SELECT COUNT(*) AS cnt FROM ${table} WHERE ${whereClause}`;
   const countResult = await db.query(countSql, statuses);
-  const count = (countResult[0] as any).cnt;
+  const count = countResult[0].cnt;
   logger.info(`${table}: ${count} inactive rows older than ${retentionMonths} months`);
   if (count === 0) {
     return;
@@ -115,7 +116,7 @@ async function batchDelete(db: MysqlDb, table: string, deleteSql: string, params
   let affected = 0;
   do {
     const result = await db.query(deleteSql, params);
-    affected = (result as any).affectedRows;
+    affected = (result as unknown as ResultSetHeader).affectedRows;
     totalDeleted += affected;
     if (affected > 0) {
       logger.info(`${table}: deleted batch of ${affected} rows`);

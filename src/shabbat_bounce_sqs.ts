@@ -27,7 +27,52 @@ const sqs = new SQSClient({
 
 const transporter = makeTransporter(config);
 
-function getStdReason(bounce: any): string {
+type BouncedRecipient = {
+  emailAddress: string;
+  status?: string;
+  diagnosticCode?: string;
+};
+
+type SesBounce = {
+  bounceType?: string;
+  bounceSubType?: string;
+  bouncedRecipients: BouncedRecipient[];
+};
+
+type SesMail = {
+  timestamp?: string;
+  source?: string;
+  messageId?: string;
+  destination?: string[];
+  commonHeaders?: {from?: string[]};
+};
+
+type SesNotification = {
+  notificationType?: string;
+  bounce?: SesBounce;
+  complaint?: {complainedRecipients: {emailAddress: string}[]};
+  mail?: SesMail;
+  hebcal?: {timestamp: string; stdReason?: string; ignored?: boolean};
+};
+
+type UnsubLogMessage = {
+  time: number;
+  status: number;
+  from: string;
+  to: string;
+  code: string;
+  message: {
+    notificationType?: string;
+    mail?: {
+      timestamp?: string;
+      source?: string;
+      messageId?: string;
+      commonHeaders?: {from?: string[]};
+    };
+  };
+};
+
+function getStdReason(bounce: SesBounce): string {
   if (bounce.bounceSubType && bounce.bounceSubType === 'MailboxFull') {
     return 'over_quota';
   }
@@ -202,7 +247,7 @@ async function unsubscribe(
   destination: string,
   emailAddress: string,
   emailId: string,
-  innerMsg: any,
+  innerMsg: SesNotification,
   logStream: fs.WriteStream
 ) {
   const t = Math.floor(Date.now() / 1000);
@@ -211,7 +256,7 @@ async function unsubscribe(
     (emailId ? 'WHERE email_id = ?' : 'WHERE email_address = ?');
   logger.debug(sql);
   const rows = await db.query(sql, [emailId || emailAddress]);
-  const logMessage: any = {
+  const logMessage: UnsubLogMessage = {
     time: t,
     status: 0,
     from: emailAddress,
@@ -236,7 +281,7 @@ async function unsubscribe(
     logStream.write('\n');
     return errorMail(emailAddress);
   }
-  const row = rows[0] as any;
+  const row = rows[0];
   const origEmail = row.email_address;
   logMessage.from = origEmail;
   if (row.email_status === 'unsubscribed') {

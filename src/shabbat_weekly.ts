@@ -123,7 +123,7 @@ function compareConfigs(a: CandleConfig, b: CandleConfig): number {
 
 async function mainInner(
   subs: Map<string, CandleConfig>,
-  config: {[s: string]: any},
+  config: Record<string, string>,
   sentLogFilename: string
 ) {
   parseAllConfigs(subs);
@@ -148,7 +148,7 @@ async function mainInner(
     }
     const info = await mailUser(transporter, cfg);
     if (!argv.dryrun) {
-      writeLogLine(logStream, cfg, info);
+      writeLogLine(logStream, cfg, info!);
       if (argv.sleeptime && i !== count - 1) {
         msleep(argv.sleeptime);
       }
@@ -174,7 +174,19 @@ type CandleConfig = {
 
 const dummyLocation = new Location(0, 0, false, 'UTC');
 
-function writeLogLine(logStream: fs.WriteStream, cfg: CandleConfig, info: any) {
+type SubjectAndBody = [
+  subject: string,
+  body: string,
+  htmlBody: string,
+  specialNote: string,
+  specialNoteTxt: string,
+];
+
+function writeLogLine(
+  logStream: fs.WriteStream,
+  cfg: CandleConfig,
+  info: nodemailer.SentMessageInfo
+) {
   const location = cfg.zip || cfg.geonameid || cfg.legacyCity;
   const mid = info.messageId.substring(1, info.messageId.indexOf('@'));
   const status = Number(info.response.startsWith('250'));
@@ -199,7 +211,7 @@ function getStartAndEnd(now: Date): dayjs.Dayjs[] {
 async function mailUser(
   transporter: nodemailer.Transporter | null,
   cfg: CandleConfig
-): Promise<unknown> {
+): Promise<nodemailer.SentMessageInfo | undefined> {
   const message = getMessage(cfg);
   if (!transporter) {
     return undefined;
@@ -298,12 +310,12 @@ let prevCfg: CandleConfig = {
   ue: false,
   location: dummyLocation,
 };
-let prevSubjAndBody: string[];
+let prevSubjAndBody: SubjectAndBody;
 
 /**
  * looks up or generates subject and body
  */
-function getSubjectAndBody(cfg: CandleConfig): string[] {
+function getSubjectAndBody(cfg: CandleConfig): SubjectAndBody {
   const location = cfg.location;
   if (
     cfg.m === prevCfg.m &&
@@ -340,7 +352,11 @@ function getSubjectAndBody(cfg: CandleConfig): string[] {
 const BLANK = '<div>&nbsp;</div>';
 const ITEM_STYLE = 'padding-left:8px;margin-bottom:2px';
 
-function genSubjectAndBody(events: Event[], options: CalOptions, cfg: CandleConfig): string[] {
+function genSubjectAndBody(
+  events: Event[],
+  options: CalOptions,
+  cfg: CandleConfig
+): SubjectAndBody {
   let body = '';
   let htmlBody = '';
   let firstCandles;
@@ -407,8 +423,7 @@ function genSubjectAndBody(events: Event[], options: CalOptions, cfg: CandleConf
   subject += ' ' + shortLocation;
   if (firstCandles) subject += ` candles ${firstCandles}`;
 
-  const specialNote = getSpecialNote(cfg, true);
-  const specialNoteTxt = getSpecialNote(cfg, false);
+  const [specialNoteTxt, specialNote] = getSpecialNote(cfg);
 
   return [subject, body, htmlBody, specialNote, specialNoteTxt];
 }
@@ -425,7 +440,16 @@ function nowrap(s: string): string {
   return `<span style="white-space: nowrap">${s}</span>`;
 }
 
-function getSpecialNote(cfg: CandleConfig, isHTML: boolean): string {
+/**
+ * Builds the seasonal greeting note in both plain-text and HTML form.
+ *
+ * The date logic runs a single time; only the holiday URLs differ between
+ * the two output formats, so each matching branch supplies a builder that
+ * renders the note given the desired URL style.
+ *
+ * @returns a `[text, html]` pair, both empty strings when there is no note
+ */
+function getSpecialNote(cfg: CandleConfig): [string, string] {
   const hd = new HDate(TODAY);
   const mm = hd.getMonth();
   const dd = hd.getDate();
@@ -433,7 +457,7 @@ function getSpecialNote(cfg: CandleConfig, isHTML: boolean): string {
   const purimMonth = HDate.isLeapYear(yy) ? months.ADAR_II : months.ADAR_I;
   const gy = TODAY0.year();
 
-  function makeUrl(holiday: string) {
+  function makeUrl(holiday: string, isHTML: boolean): string {
     const il = cfg.location.getIsrael();
     return isHTML
       ? urlEncodeAndTrack(`https://www.hebcal.com/holidays/${holiday}-${gy}`, il)
@@ -441,7 +465,7 @@ function getSpecialNote(cfg: CandleConfig, isHTML: boolean): string {
   }
 
   const shortLocation = cfg.location.getShortName();
-  let note;
+  let buildNote: ((isHTML: boolean) => string) | undefined;
   if ((mm === months.AV && dd >= 16 && dd <= 26) || (mm === months.ELUL && dd >= 16 && dd <= 26)) {
     // for a week or two in Av and the last week or two of Elul
     const nextYear = yy + 1;
@@ -456,7 +480,7 @@ function getSpecialNote(cfg: CandleConfig, isHTML: boolean): string {
     }
     url = urlEncodeAndTrack(url);
     const rhNameSpan = nowrap(`Rosh Hashana ${nextYear}`);
-    note = `Shana Tova! We wish you a happy and healthy New Year.
+    buildNote = () => `Shana Tova! We wish you a happy and healthy New Year.
 ${rhNameSpan} begins at sundown on ${strtime}.
 <br><br>Print your <a
 style="color:#356635" href="${url}">${shortLocation} ${nextYear} year-at-a-glance</a>
@@ -465,21 +489,21 @@ for Shabbat and holiday candle-lighting times on a single page.`;
     // between RH & YK
     const erevYK = dayjs(new HDate(9, months.TISHREI, yy).greg());
     const strtime = nowrap(erevYK.format(FORMAT_DOW_MONTH_DAY));
-    note = `G’mar Chatima Tova! We wish you a good inscription in the Book of Life.
-<br><a style="color:#356635" href="${makeUrl('yom-kippur')}">Yom Kippur ${yy}</a>
+    buildNote = isHTML => `G’mar Chatima Tova! We wish you a good inscription in the Book of Life.
+<br><a style="color:#356635" href="${makeUrl('yom-kippur', isHTML)}">Yom Kippur ${yy}</a>
 begins at sundown on ${strtime}.`;
   } else if (
     (mm === months.TISHREI && dd >= 17 && dd <= 21) ||
     (mm === months.NISAN && dd >= 17 && dd <= 20)
   ) {
     const holiday = mm === months.TISHREI ? 'Sukkot' : 'Pesach';
-    note = `Moadim L’Simcha! We wish you a very happy ${holiday}.`;
+    buildNote = () => `Moadim L’Simcha! We wish you a very happy ${holiday}.`;
   } else if (mm === purimMonth && dd >= 2 && dd <= 10) {
     // show Purim greeting 1.5 weeks before
     const erevPurim = dayjs(new HDate(13, purimMonth, yy).greg());
     const strtime = nowrap(erevPurim.format(FORMAT_DOW_MONTH_DAY));
-    note = `Chag Purim Sameach!
-<a style="color:#356635" href="${makeUrl('purim')}">Purim ${yy}</a>
+    buildNote = isHTML => `Chag Purim Sameach!
+<a style="color:#356635" href="${makeUrl('purim', isHTML)}">Purim ${yy}</a>
 begins at sundown on ${strtime}.`;
   } else if (
     (mm === purimMonth && dd >= 17 && dd <= 25) ||
@@ -488,8 +512,8 @@ begins at sundown on ${strtime}.`;
     // show Pesach greeting shortly after Purim and ~2 weeks before
     const erevPesach = dayjs(new HDate(14, months.NISAN, yy).greg());
     const strtime = nowrap(erevPesach.format(FORMAT_DOW_MONTH_DAY));
-    note = `Chag Kasher v’Sameach! We wish you a happy
-<a style="color:#356635" href="${makeUrl('pesach')}">Pesach ${yy}</a>.
+    buildNote = isHTML => `Chag Kasher v’Sameach! We wish you a happy
+<a style="color:#356635" href="${makeUrl('pesach', isHTML)}">Pesach ${yy}</a>.
 <br>Passover begins at sundown on ${strtime}.`;
   } else if (mm === months.KISLEV && dd >= 1 && dd <= 13) {
     // for the first 2 weeks of Kislev, show Chanukah greeting
@@ -497,28 +521,25 @@ begins at sundown on ${strtime}.`;
     const dow = erevChanukah.day();
     const strtime = nowrap(erevChanukah.format(FORMAT_DOW_MONTH_DAY));
     const when = dow === 5 ? 'before sundown' : dow === 6 ? 'at nightfall' : 'at sundown';
-    note = `Chag Urim Sameach! Light the first
-<a style="color:#356635" href="${makeUrl('chanukah')}">Chanukah candle</a>
+    buildNote = isHTML => `Chag Urim Sameach! Light the first
+<a style="color:#356635" href="${makeUrl('chanukah', isHTML)}">Chanukah candle</a>
 ${when} on ${strtime}.`;
   }
 
-  if (!note) {
-    return '';
+  if (!buildNote) {
+    return ['', ''];
   }
 
-  if (!isHTML) {
-    return htmlToText(note, htmlToTextOptions) + '\n\n';
-  }
-
-  return (
+  const text = htmlToText(buildNote(false), htmlToTextOptions) + '\n\n';
+  const html =
     '<div style="font-size:14px;font-family:arial,helvetica,sans-serif;padding:8px;color:#468847;background-color:#dff0d8;border-color:#d6e9c6;border-radius:4px">\n' +
-    note +
-    `\n</div>\n${BLANK}\n`
-  );
+    buildNote(true) +
+    `\n</div>\n${BLANK}\n`;
+  return [text, html];
 }
 
 async function loadSubs(
-  config: {[s: string]: string},
+  config: Record<string, string>,
   addrs: string[]
 ): Promise<Map<string, CandleConfig>> {
   const db = makeDb(logger, config);

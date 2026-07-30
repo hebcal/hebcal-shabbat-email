@@ -43,7 +43,7 @@ export const htmlToTextOptions = {
 /**
  * create reusable transporter object using the default SMTP transport
  */
-export function makeTransporter(iniConfig: {[s: string]: string}): nodemailer.Transporter {
+export function makeTransporter(iniConfig: Record<string, string>): nodemailer.Transporter {
   return nodemailer.createTransport({
     host: iniConfig['hebcal.email.shabbat.host'],
     port: 465,

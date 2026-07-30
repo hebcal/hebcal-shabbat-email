@@ -75,9 +75,7 @@ async function sendMail(message: nodemailer.SendMailOptions): Promise<unknown> {
   }
 }
 
-type StringDateMap = {
-  [s: string]: Date;
-};
+type StringDateMap = Record<string, Date>;
 
 /**
  * Main event loop
@@ -157,9 +155,7 @@ type SubInfo = SubBase & {
   diff?: number;
 };
 
-type RawYahrzeitContents = {
-  [s: string]: string | number;
-};
+type RawYahrzeitContents = Record<string, string | number>;
 
 /**
  * Returns an array of either 1 or 2 Hebrew years to consider for anniversaries.

@@ -51,7 +51,7 @@ export class MysqlDb {
   }
 }
 
-export function makeDb(logger: Logger, iniConfig: {[s: string]: string}): MysqlDb {
+export function makeDb(logger: Logger, iniConfig: Record<string, string>): MysqlDb {
   const host = iniConfig['hebcal.mysql.host'];
   const port = +iniConfig['hebcal.mysql.port'] || 3306;
   const user = iniConfig['hebcal.mysql.user'];
