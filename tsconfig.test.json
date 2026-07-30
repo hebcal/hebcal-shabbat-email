@@ -1,0 +1,11 @@
+{
+  // Typecheck-only config that also covers the tests (which live outside the
+  // build `rootDir`). `npm run build` emits src/ alone; this validates types
+  // across src/ and test/ without emitting.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
+}
