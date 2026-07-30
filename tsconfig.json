@@ -12,6 +12,12 @@
     "sourceMap": false,
     "moduleResolution": "bundler",
     "composite": false,
+    // Load-bearing: quick-lru and thread-stream ship .d.ts files that fail to
+    // typecheck, and the @hebcal/core declarations need esnext.temporal in `lib`.
+    // The upstream bugs are already on their latest versions, so there is nothing
+    // to upgrade to. Without this, the build fails on errors we cannot fix.
+    // Prefer removing it if that is ever resolved — it is what hides unresolvable
+    // imports in dependency .d.ts files, which silently degrade them to `any`.
     "skipLibCheck": true,
     "paths": {
       "*": ["./types/*"]
