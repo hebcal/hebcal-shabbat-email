@@ -78,12 +78,16 @@ async function main() {
     }
   }
 
-  return new Promise((resolve, reject) => {
+  return new Promise<boolean>((resolve, reject) => {
     const lockfile = fs.openSync('/tmp/hebcal-shabbat-weekly.lock', 'w');
     flock(lockfile, 'ex', err => {
       if (err) {
+        // Never acquired the exclusive lock: bail out instead of mailing,
+        // otherwise a concurrent run could double-send.
         logger.error(err);
+        fs.closeSync(lockfile);
         reject(err);
+        return;
       }
       mainInner(subs, config, sentLogFilename)
         .then(() => {
@@ -92,6 +96,7 @@ async function main() {
         })
         .catch((err: Error) => {
           logger.error(err);
+          fs.closeSync(lockfile);
           reject(err);
         });
     });
