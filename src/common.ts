@@ -3,10 +3,9 @@ import {Dayjs} from 'dayjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import ini from 'ini';
-import minimist from 'minimist';
 import nodemailer from 'nodemailer';
 
-export function getLogLevel(argv: minimist.ParsedArgs): string {
+export function getLogLevel(argv: {verbose?: boolean; quiet?: boolean}): string {
   if (argv.verbose) return 'debug';
   if (argv.quiet) return 'warn';
   return 'info';

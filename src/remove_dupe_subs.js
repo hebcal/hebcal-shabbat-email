@@ -1,12 +1,17 @@
 /* global process */
-import minimist from 'minimist';
+import {parseArgs} from 'node:util';
 import pino from 'pino';
 import {makeDb} from './makedb.js';
 import {readIniConfig} from './common.js';
 
-const argv = minimist(process.argv.slice(2), {
-  boolean: ['dryrun', 'quiet', 'force', 'verbose'],
-  alias: {n: 'dryrun', q: 'quiet', f: 'force', v: 'verbose'},
+const {values: argv} = parseArgs({
+  options: {
+    dryrun: {type: 'boolean', short: 'n'},
+    quiet: {type: 'boolean', short: 'q'},
+    force: {type: 'boolean', short: 'f'},
+    verbose: {type: 'boolean', short: 'v'},
+    ini: {type: 'string'},
+  },
 });
 
 const logger = pino({

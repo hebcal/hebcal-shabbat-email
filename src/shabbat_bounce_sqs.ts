@@ -1,13 +1,16 @@
 import {DeleteMessageCommand, ReceiveMessageCommand, SQSClient} from '@aws-sdk/client-sqs';
 import fs from 'node:fs';
-import minimist from 'minimist';
+import {parseArgs} from 'node:util';
 import pino from 'pino';
 import {getLogLevel, makeTransporter, readIniConfig, translateSmtpStatus} from './common.js';
 import {LOGDIR, dirIfExistsOrCwd, makeDb, MysqlDb} from './makedb.js';
 
-const argv = minimist(process.argv.slice(2), {
-  boolean: ['quiet', 'verbose'],
-  alias: {q: 'quiet', v: 'verbose'},
+const {values: argv} = parseArgs({
+  options: {
+    quiet: {type: 'boolean', short: 'q'},
+    verbose: {type: 'boolean', short: 'v'},
+    ini: {type: 'string'},
+  },
 });
 
 const logger = pino({

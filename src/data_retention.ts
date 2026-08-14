@@ -1,6 +1,6 @@
 import pino from 'pino';
-import minimist from 'minimist';
 import {ResultSetHeader} from 'mysql2';
+import {parseArgs} from 'node:util';
 import {makeDb, MysqlDb} from './makedb.js';
 import {getLogLevel, readIniConfig} from './common.js';
 
@@ -36,10 +36,15 @@ const INACTIVE_TABLES: InactiveTable[] = [
   },
 ];
 
-const argv = minimist(process.argv.slice(2), {
-  boolean: ['dryrun', 'quiet', 'help', 'verbose'],
-  string: ['ini'],
-  alias: {h: 'help', n: 'dryrun', q: 'quiet', v: 'verbose'},
+const {values: argv} = parseArgs({
+  options: {
+    dryrun: {type: 'boolean', short: 'n'},
+    quiet: {type: 'boolean', short: 'q'},
+    help: {type: 'boolean', short: 'h'},
+    verbose: {type: 'boolean', short: 'v'},
+    ini: {type: 'string'},
+    months: {type: 'string'},
+  },
 });
 
 if (argv.help) {

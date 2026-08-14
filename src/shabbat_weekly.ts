@@ -11,7 +11,7 @@ import {GeoDb} from '@hebcal/geo-sqlite';
 import dayjs from 'dayjs';
 import fs from 'node:fs';
 import {flock} from 'fs-ext';
-import minimist from 'minimist';
+import {parseArgs} from 'node:util';
 import nodemailer from 'nodemailer';
 import pino from 'pino';
 import {
@@ -26,16 +26,28 @@ import {getSpecialNote} from './specialNote.js';
 import {urlEncodeAndTrack} from './tracking.js';
 import {RowDataPacket} from 'mysql2';
 
-const argv = minimist(process.argv.slice(2), {
-  boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose', 'localhost', 'positive', 'negative'],
-  alias: {h: 'help', n: 'dryrun', q: 'quiet', f: 'force', v: 'verbose'},
+const {values: argv, positionals} = parseArgs({
+  options: {
+    dryrun: {type: 'boolean', short: 'n'},
+    quiet: {type: 'boolean', short: 'q'},
+    help: {type: 'boolean', short: 'h'},
+    force: {type: 'boolean', short: 'f'},
+    verbose: {type: 'boolean', short: 'v'},
+    localhost: {type: 'boolean'},
+    positive: {type: 'boolean'},
+    negative: {type: 'boolean'},
+    date: {type: 'string'},
+    ini: {type: 'string'},
+    sleeptime: {type: 'string'},
+  },
+  allowPositionals: true,
 });
 if (argv.help) {
   usage();
   process.exit(1);
 }
 // allow sleeptime=0 for no sleep
-argv.sleeptime = argv.sleeptime === undefined ? 300 : +argv.sleeptime;
+const sleeptime = argv.sleeptime === undefined ? 300 : +argv.sleeptime;
 
 const logger = pino({
   level: getLogLevel(argv),
@@ -62,7 +74,7 @@ const geoDb = new GeoDb(null, 'zips.sqlite3', 'geonames.sqlite3');
 async function main() {
   logger.info(`Reading ${argv.ini || 'default config'}...`);
   const config = readIniConfig(argv.ini);
-  const subs = await loadSubs(config, argv._);
+  const subs = await loadSubs(config, positionals);
   logger.info(`Loaded ${subs.size} users`);
 
   const logdir = await dirIfExistsOrCwd(LOGDIR);
@@ -151,8 +163,8 @@ async function mainInner(
     const info = await mailUser(transporter, cfg);
     if (!argv.dryrun) {
       writeLogLine(logStream, cfg, info!);
-      if (argv.sleeptime && i !== count - 1) {
-        msleep(argv.sleeptime);
+      if (sleeptime && i !== count - 1) {
+        msleep(sleeptime);
       }
     }
     i++;

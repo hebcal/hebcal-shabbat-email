@@ -2,7 +2,7 @@ import dayjs, {Dayjs} from 'dayjs';
 import {HDate, months, getYahrzeitHD, getBirthdayHD} from '@hebcal/hdate';
 import {Event, flags, Locale} from '@hebcal/core';
 import pino from 'pino';
-import minimist from 'minimist';
+import {parseArgs} from 'node:util';
 import nodemailer from 'nodemailer';
 import {makeDb, MysqlDb} from './makedb.js';
 import {
@@ -18,10 +18,19 @@ import {murmur32HexSync} from '@hebcal/murmurhash3';
 import {htmlToText} from 'nodemailer-html-to-text';
 import {RowDataPacket} from 'mysql2';
 
-const argv = minimist(process.argv.slice(2), {
-  boolean: ['dryrun', 'quiet', 'help', 'force', 'verbose', 'localhost'],
-  string: ['email', 'ini'],
-  alias: {h: 'help', n: 'dryrun', q: 'quiet', f: 'force', v: 'verbose'},
+const {values: argv} = parseArgs({
+  options: {
+    dryrun: {type: 'boolean', short: 'n'},
+    quiet: {type: 'boolean', short: 'q'},
+    help: {type: 'boolean', short: 'h'},
+    force: {type: 'boolean', short: 'f'},
+    verbose: {type: 'boolean', short: 'v'},
+    localhost: {type: 'boolean'},
+    email: {type: 'string'},
+    ini: {type: 'string'},
+    date: {type: 'string'},
+    sleeptime: {type: 'string'},
+  },
 });
 if (argv.help) {
   usage();
@@ -29,7 +38,7 @@ if (argv.help) {
 }
 
 // allow sleeptime=0 for no sleep
-argv.sleeptime = argv.sleeptime === undefined ? 300 : +argv.sleeptime;
+const sleeptime = argv.sleeptime === undefined ? 300 : +argv.sleeptime;
 
 const logger = pino({
   level: getLogLevel(argv),
@@ -317,8 +326,8 @@ async function processAnniversary(info: SubInfo): Promise<unknown> {
  VALUES (?, ?, ?, ?, NOW())`;
       logger.debug(sqlSentUpdate);
       await db.query(sqlSentUpdate, [info.id, info.hash, info.num, info.hyear]);
-      if (argv.sleeptime) {
-        msleep(argv.sleeptime);
+      if (sleeptime) {
+        msleep(sleeptime);
       }
     }
     numSent++;
@@ -583,7 +592,7 @@ function getDateForId(query: RawYahrzeitContents, id: number): YearMonthDay {
 function usage() {
   const PROG = 'yahrzeit_email';
   const usage = `Usage:
-    ${PROG} [options] [email_address...]
+    ${PROG} [options]
 
 Options:
   --help           Help
@@ -593,6 +602,7 @@ Options:
   --verbose        Extra debugging information
   --force          Run even if it's not Thursday
   --ini <file>     Use non-default hebcal-dot-com.ini
+  --email <addr>   Only send to <addr>
 `;
   console.log(usage);
 }

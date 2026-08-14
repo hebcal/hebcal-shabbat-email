@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import pino from 'pino';
-import minimist from 'minimist';
+import {parseArgs} from 'node:util';
 import {LOGDIR, makeDb, dirIfExistsOrCwd, MysqlDb} from './makedb.js';
 import {getLogLevel, readIniConfig} from './common.js';
 
@@ -8,13 +8,23 @@ const PROG = 'shabbat_deactivate.js';
 const COUNT_DEFAULT = 7;
 const REASONS_DEFAULT = 'amzn_abuse,user_unknown,user_disabled,domain_error,spam';
 
-const argv = minimist(process.argv.slice(2));
-if (argv.help || argv.h) {
+const {values: argv} = parseArgs({
+  options: {
+    dryrun: {type: 'boolean', short: 'n'},
+    quiet: {type: 'boolean', short: 'q'},
+    help: {type: 'boolean', short: 'h'},
+    verbose: {type: 'boolean', short: 'v'},
+    ini: {type: 'string'},
+    reasons: {type: 'string'},
+    count: {type: 'string'},
+  },
+});
+if (argv.help) {
   usage();
   process.exit(1);
 }
-argv.reasons = argv.reasons || REASONS_DEFAULT;
-argv.count = argv.count || COUNT_DEFAULT;
+const reasons = (argv.reasons || REASONS_DEFAULT).split(',');
+const countThreshold = argv.count ? Number.parseInt(argv.count, 10) : COUNT_DEFAULT;
 
 const logger = pino({
   level: getLogLevel(argv),
@@ -68,7 +78,6 @@ async function deactivateSubs(db: MysqlDb, addrs: string[]) {
 }
 
 async function getCandidates(db: MysqlDb): Promise<string[]> {
-  const reasons = argv.reasons.split(',');
   const reasonsSql = reasons.join("','");
   const sql = `
 SELECT b.email_address,std_reason,count(1) as count
@@ -80,8 +89,9 @@ GROUP by b.email_address,std_reason`;
   logger.info(sql);
   const results = await db.query(sql);
   const addrs: string[] = [];
-  for (const row of results) {
-    if (row.count > argv.count || row.std_reason === 'amzn_abuse') {
+  for (const row0 of results) {
+    const row = row0 as any;
+    if (row.count > countThreshold || row.std_reason === 'amzn_abuse') {
       if (!argv.quiet) {
         logger.info(`${row.email_address} (${row.count} bounces)`);
       }
