@@ -1,17 +1,16 @@
-import minimist from 'minimist';
 import {describe, expect, it} from 'vitest';
 import {getLogLevel, shouldSendEmailToday, translateSmtpStatus} from '../src/common.js';
 import dayjs from 'dayjs';
 
 describe('getLogLevel', () => {
   it('maps --verbose to debug, --quiet to warn, and defaults to info', () => {
-    expect(getLogLevel(minimist(['--verbose']))).toBe('debug');
-    expect(getLogLevel(minimist(['--quiet']))).toBe('warn');
-    expect(getLogLevel(minimist([]))).toBe('info');
+    expect(getLogLevel({verbose: true})).toBe('debug');
+    expect(getLogLevel({quiet: true})).toBe('warn');
+    expect(getLogLevel({})).toBe('info');
   });
 
   it('prefers debug when both verbose and quiet are set', () => {
-    expect(getLogLevel(minimist(['--verbose', '--quiet']))).toBe('debug');
+    expect(getLogLevel({verbose: true, quiet: true})).toBe('debug');
   });
 });
 
