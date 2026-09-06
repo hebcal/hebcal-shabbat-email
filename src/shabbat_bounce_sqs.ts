@@ -1,8 +1,14 @@
-import {DeleteMessageCommand, ReceiveMessageCommand, SQSClient} from '@aws-sdk/client-sqs';
+import {DeleteMessageCommand, Message, ReceiveMessageCommand, SQSClient} from '@aws-sdk/client-sqs';
 import fs from 'node:fs';
 import {parseArgs} from 'node:util';
 import pino from 'pino';
-import {getLogLevel, makeTransporter, readIniConfig, translateSmtpStatus} from './common.js';
+import {
+  getLogLevel,
+  makeTransporter,
+  normalizeEmailAddress,
+  readIniConfig,
+  translateSmtpStatus,
+} from './common.js';
 import {LOGDIR, dirIfExistsOrCwd, makeDb, MysqlDb} from './makedb.js';
 
 const {values: argv} = parseArgs({
@@ -95,6 +101,74 @@ function getStdReason(bounce: SesBounce): string {
   return 'unknown';
 }
 
+/** Flushes and closes a log stream, resolving once the OS write completes. */
+function endLogStream(stream: fs.WriteStream): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    stream.on('finish', () => resolve(true));
+    stream.on('error', reject);
+    stream.end();
+  });
+}
+
+/** Deletes a batch of processed messages from the queue. */
+async function deleteMessages(sqs: SQSClient, queueURL: string, messages: Message[]) {
+  await Promise.all(
+    messages.map(message => {
+      const command = new DeleteMessageCommand({
+        QueueUrl: queueURL,
+        ReceiptHandle: message.ReceiptHandle,
+      });
+      return sqs.send(command);
+    })
+  );
+}
+
+/** Records a single bounce/complaint notification in the DB. */
+async function recordBounceNotification(innerMsg: any, db: MysqlDb, sql: string) {
+  if (innerMsg.notificationType === 'Bounce') {
+    const bounceType = innerMsg.bounce.bounceType;
+    const recip = innerMsg.bounce.bouncedRecipients[0];
+    const emailAddress = normalizeEmailAddress(recip.emailAddress);
+    let stdReason = getStdReason(innerMsg.bounce);
+    if (stdReason === 'unknown' && bounceType === 'Transient') {
+      stdReason = bounceType;
+    }
+    logger.info(`Bounce: ${emailAddress} ${stdReason}`);
+    innerMsg.hebcal.stdReason = stdReason;
+    await db.query(sql, [emailAddress, stdReason, recip.diagnosticCode]);
+  } else if (innerMsg.notificationType === 'Complaint') {
+    const emailAddress = normalizeEmailAddress(
+      innerMsg.complaint.complainedRecipients[0].emailAddress
+    );
+    const stdReason = 'amzn_abuse';
+    logger.info(`Complaint: ${emailAddress} ${stdReason}`);
+    innerMsg.hebcal.stdReason = stdReason;
+    await db.query(sql, [emailAddress, stdReason, stdReason]);
+  } else {
+    logger.warn(`Ignoring unknown bounce message ${innerMsg.notificationType}`);
+    innerMsg.hebcal.ignored = true;
+    console.log(innerMsg);
+  }
+}
+
+async function processBounceMessage(
+  message: Message,
+  db: MysqlDb,
+  sql: string,
+  bounceLogStream: fs.WriteStream
+) {
+  if (!message.Body) {
+    logger.warn(`Skipping ${message.MessageId} with no body`);
+    return;
+  }
+  const body = JSON.parse(message.Body);
+  const innerMsg = JSON.parse(body.Message);
+  innerMsg.hebcal = {timestamp: new Date().toISOString()};
+  await recordBounceNotification(innerMsg, db, sql);
+  bounceLogStream.write(JSON.stringify(innerMsg));
+  bounceLogStream.write('\n');
+}
+
 async function readBounceQueue(sqs: SQSClient, db: MysqlDb) {
   const bounceLogFilename = logdir + '/bounce-' + new Date().toISOString().substring(0, 7) + '.log';
   const bounceLogStream = fs.createWriteStream(bounceLogFilename, {flags: 'a'});
@@ -114,58 +188,45 @@ async function readBounceQueue(sqs: SQSClient, db: MysqlDb) {
     const response = await sqs.send(command);
     if (!response.Messages?.length) {
       logger.info('Bounces: done');
-      return new Promise((resolve, reject) => {
-        bounceLogStream.on('finish', () => resolve(true));
-        bounceLogStream.on('error', reject);
-        bounceLogStream.end();
-      });
+      return endLogStream(bounceLogStream);
     }
     logger.debug(`Processing ${response.Messages.length} bounce messages`);
     for (const message of response.Messages) {
-      if (!message.Body) {
-        logger.warn(`Skipping ${message.MessageId} with no body`);
-        continue;
-      }
-      const body = JSON.parse(message.Body);
-      const innerMsg = JSON.parse(body.Message);
-      innerMsg.hebcal = {timestamp: new Date().toISOString()};
-      if (innerMsg.notificationType === 'Bounce') {
-        const bounceType = innerMsg.bounce.bounceType;
-        const recip = innerMsg.bounce.bouncedRecipients[0];
-        const emailAddress = recip.emailAddress;
-        let stdReason = getStdReason(innerMsg.bounce);
-        if (stdReason === 'unknown' && bounceType === 'Transient') {
-          stdReason = bounceType;
-        }
-        logger.info(`Bounce: ${emailAddress} ${stdReason}`);
-        innerMsg.hebcal.stdReason = stdReason;
-        await db.query(sql, [emailAddress, stdReason, recip.diagnosticCode]);
-      } else if (innerMsg.notificationType === 'Complaint') {
-        const emailAddress = innerMsg.complaint.complainedRecipients[0].emailAddress;
-        const stdReason = 'amzn_abuse';
-        logger.info(`Complaint: ${emailAddress} ${stdReason}`);
-        innerMsg.hebcal.stdReason = stdReason;
-        await db.query(sql, [emailAddress, stdReason, stdReason]);
-      } else {
-        logger.warn(`Ignoring unknown bounce message ${innerMsg.notificationType}`);
-        innerMsg.hebcal.ignored = true;
-        console.log(innerMsg);
-      }
-      bounceLogStream.write(JSON.stringify(innerMsg));
-      bounceLogStream.write('\n');
+      await processBounceMessage(message, db, sql, bounceLogStream);
     }
     logger.debug(`Bounces: deleting ${response.Messages.length} messages`);
-    await Promise.all(
-      response.Messages.map(message => {
-        const params = {
-          QueueUrl: queueURL,
-          ReceiptHandle: message.ReceiptHandle,
-        };
-        const command = new DeleteMessageCommand(params);
-        return sqs.send(command);
-      })
-    );
+    await deleteMessages(sqs, queueURL, response.Messages);
   }
+}
+
+/**
+ * Determines the unsubscribe source address, preferring the parsed From
+ * header over the envelope source when available.
+ */
+function extractUnsubSource(mail: SesMail): string {
+  const from = mail.commonHeaders?.from?.[0];
+  if (from) {
+    return normalizeEmailAddress(from);
+  }
+  return mail.source as string;
+}
+
+async function processUnsubMessage(message: Message, db: MysqlDb, subsLogStream: fs.WriteStream) {
+  if (!message.Body) {
+    logger.warn(`Skipping ${message.MessageId} with no body`);
+    return;
+  }
+  const body = JSON.parse(message.Body);
+  const innerMsg = JSON.parse(body.Message);
+  if (innerMsg.notificationType !== 'Received') {
+    return;
+  }
+  const destination = innerMsg.mail.destination[0];
+  const matches0 = destination?.match(/^shabbat-unsubscribe\+(\w+)@hebcal\.com$/);
+  const emailId = matches0?.length && matches0[1];
+  const source = extractUnsubSource(innerMsg.mail);
+  logger.info(`Unsubscribe from=${source} emailId=${emailId}`);
+  await unsubscribe(db, destination, source, emailId, innerMsg, subsLogStream);
 }
 
 async function readUnsubQueue(sqs: SQSClient, db: MysqlDb) {
@@ -185,48 +246,14 @@ async function readUnsubQueue(sqs: SQSClient, db: MysqlDb) {
     const response = await sqs.send(command);
     if (!response.Messages?.length) {
       logger.info('Unsubscribes: done');
-      return new Promise((resolve, reject) => {
-        subsLogStream.on('finish', () => resolve(true));
-        subsLogStream.on('error', reject);
-        subsLogStream.end();
-      });
+      return endLogStream(subsLogStream);
     }
     logger.debug(`Processing ${response.Messages.length} unsubscribe messages`);
     for (const message of response.Messages) {
-      if (!message.Body) {
-        logger.warn(`Skipping ${message.MessageId} with no body`);
-        continue;
-      }
-      const body = JSON.parse(message.Body);
-      const innerMsg = JSON.parse(body.Message);
-      if (innerMsg.notificationType === 'Received') {
-        let source = innerMsg.mail.source;
-        const destination = innerMsg.mail.destination[0];
-        const matches0 = destination?.match(/^shabbat-unsubscribe\+(\w+)@hebcal\.com$/);
-        const emailId = matches0?.length && matches0[1];
-        const commonHeaders = innerMsg.mail.commonHeaders;
-        if (commonHeaders?.from?.[0]) {
-          const from = commonHeaders.from[0];
-          const matches = from?.match(/^[^<]*<([^>]+)>/);
-          if (matches?.length && matches[1]) {
-            source = matches[1].toLowerCase();
-          }
-        }
-        logger.info(`Unsubscribe from=${source} emailId=${emailId}`);
-        await unsubscribe(db, destination, source, emailId, innerMsg, subsLogStream);
-      }
+      await processUnsubMessage(message, db, subsLogStream);
     }
     logger.info(`Unsubscribes: deleting ${response.Messages.length} messages`);
-    await Promise.all(
-      response.Messages.map(message => {
-        const params = {
-          QueueUrl: queueURL,
-          ReceiptHandle: message.ReceiptHandle,
-        };
-        const command = new DeleteMessageCommand(params);
-        return sqs.send(command);
-      })
-    );
+    await deleteMessages(sqs, queueURL, response.Messages);
   }
 }
 
