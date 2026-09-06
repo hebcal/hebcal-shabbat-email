@@ -1,5 +1,10 @@
 import {describe, expect, it} from 'vitest';
-import {getLogLevel, shouldSendEmailToday, translateSmtpStatus} from '../src/common.js';
+import {
+  getLogLevel,
+  normalizeEmailAddress,
+  shouldSendEmailToday,
+  translateSmtpStatus,
+} from '../src/common.js';
 import dayjs from 'dayjs';
 
 describe('getLogLevel', () => {
@@ -26,6 +31,30 @@ describe('translateSmtpStatus', () => {
   it('returns unknown for unrecognized codes', () => {
     expect(translateSmtpStatus('2.0.0')).toBe('unknown');
     expect(translateSmtpStatus('')).toBe('unknown');
+  });
+});
+
+describe('normalizeEmailAddress', () => {
+  it('passes a bare address through unchanged', () => {
+    expect(normalizeEmailAddress('user@example.com')).toBe('user@example.com');
+  });
+
+  it('extracts the address from a "Display Name" <addr> mailbox', () => {
+    expect(normalizeEmailAddress('"Jon M. Levinson" <jonlevinson@verizon.net>')).toBe(
+      'jonlevinson@verizon.net'
+    );
+    expect(normalizeEmailAddress('Ed Geil <eddaytona@yahoo.com>')).toBe('eddaytona@yahoo.com');
+  });
+
+  it('extracts the address when the display name is an RFC 2047 encoded-word', () => {
+    expect(normalizeEmailAddress('=?UTF-8?B?15DXmdeq157XqCDXntep15Q=?= <6388326@gmail.com>')).toBe(
+      '6388326@gmail.com'
+    );
+  });
+
+  it('lower-cases and trims', () => {
+    expect(normalizeEmailAddress('  User@Example.COM  ')).toBe('user@example.com');
+    expect(normalizeEmailAddress('Name <User@Example.com>')).toBe('user@example.com');
   });
 });
 
