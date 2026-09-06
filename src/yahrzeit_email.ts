@@ -4,6 +4,7 @@ import {Event, flags, Locale} from '@hebcal/core';
 import pino from 'pino';
 import {parseArgs} from 'node:util';
 import nodemailer from 'nodemailer';
+import type {SendMailOptions, Transporter} from 'nodemailer';
 import {makeDb, MysqlDb} from './makedb.js';
 import {
   getLogLevel,
@@ -44,7 +45,7 @@ const logger = pino({
   level: getLogLevel(argv),
 });
 
-let transporter: nodemailer.Transporter;
+let transporter: Transporter;
 let db: MysqlDb;
 
 const today = dayjs(argv.date); // undefined => new Date()
@@ -69,7 +70,7 @@ let numSent = 0;
 /**
  * Sends the message via nodemailer, or no-op for dryrun
  */
-async function sendMail(message: nodemailer.SendMailOptions): Promise<unknown> {
+async function sendMail(message: SendMailOptions): Promise<unknown> {
   if (argv.dryrun) {
     return {response: '250 OK', messageId: message.messageId, dryrun: true};
   } else {
@@ -178,43 +179,86 @@ function getThisHebrewYear(): number[] {
   return hyears;
 }
 
-async function loadSubsFromDb(rows: RowDataPacket[], optout: StringDateMap): Promise<SubInfo[]> {
-  const hyears = getThisHebrewYear();
-  const sent7 = await loadRecentSent('yahrzeit_sent7');
-  const sent1 = await loadRecentSent('yahrzeit_sent1');
+/** Shared lookup tables threaded through the per-row anniversary scan. */
+type LoadContext = {
+  hyears: number[];
+  sent7: StringDateMap;
+  sent1: StringDateMap;
+  optout: StringDateMap;
+};
 
-  const toSend: SubInfo[] = [];
-  for (const row of rows) {
-    const contents: RawYahrzeitContents = row.contents;
-    const id = (contents.id = row.id);
-    if (optout[`${id}.0`]) {
-      logger.debug(`Skipping global opt-out ${id}`);
+/**
+ * For a single entry and Hebrew year, returns the reminder to send (preferring
+ * the 7-day reminder over the 1-day), or undefined if none is due.
+ */
+function findSubInfoForYear(
+  contents: RawYahrzeitContents,
+  num: number,
+  info0: SubBase,
+  hyear: number,
+  ctx: LoadContext
+): SubInfo | undefined {
+  for (const ndays of [7, 1]) {
+    const sent = ndays === 7 ? ctx.sent7 : ctx.sent1;
+    const info = makeSubInfo(contents, num, info0, hyear, sent, ndays);
+    if (info) {
+      return info;
+    }
+  }
+  return undefined;
+}
+
+/** Collects any due reminders for a single anniversary entry across Hebrew years. */
+function collectEntry(
+  contents: RawYahrzeitContents,
+  num: number,
+  info0: SubBase,
+  ctx: LoadContext,
+  toSend: SubInfo[]
+): void {
+  for (const hyear of ctx.hyears) {
+    const info = findSubInfoForYear(contents, num, info0, hyear, ctx);
+    if (info) {
+      toSend.push(info);
+    }
+  }
+}
+
+/** Collects any due reminders for all anniversary entries in a single DB row. */
+function collectRow(row: RowDataPacket, ctx: LoadContext, toSend: SubInfo[]): void {
+  const contents: RawYahrzeitContents = row.contents;
+  const id = (contents.id = row.id);
+  if (ctx.optout[`${id}.0`]) {
+    logger.debug(`Skipping global opt-out ${id}`);
+    return;
+  }
+  contents.calendarId = row.calendar_id;
+  contents.emailAddress = row.email_addr;
+  const maxId = getMaxYahrzeitId(contents);
+  logger.trace(`${id} ${contents.emailAddress} ${maxId}`);
+  for (let num = 1; num <= maxId; num++) {
+    const info0 = getYahrzeitDetailForId(contents, num);
+    if (info0 === null) {
+      logger.debug(`Skipping blank ${id}.${num}`);
       continue;
     }
-    contents.calendarId = row.calendar_id;
-    contents.emailAddress = row.email_addr;
-    const maxId = getMaxYahrzeitId(contents);
-    logger.trace(`${id} ${contents.emailAddress} ${maxId}`);
-    for (let num = 1; num <= maxId; num++) {
-      const info0 = getYahrzeitDetailForId(contents, num);
-      if (info0 === null) {
-        logger.debug(`Skipping blank ${id}.${num}`);
-        continue;
-      }
-      if (skipOptOut(id, info0, optout)) {
-        continue;
-      }
-      for (const hyear of hyears) {
-        for (const ndays of [7, 1]) {
-          const sent = ndays === 7 ? sent7 : sent1;
-          const info = makeSubInfo(contents, num, info0, hyear, sent, ndays);
-          if (info) {
-            toSend.push(info);
-            break;
-          }
-        }
-      }
+    if (skipOptOut(id, info0, ctx.optout)) {
+      continue;
     }
+    collectEntry(contents, num, info0, ctx, toSend);
+  }
+}
+
+async function loadSubsFromDb(rows: RowDataPacket[], optout: StringDateMap): Promise<SubInfo[]> {
+  const ctx: LoadContext = {
+    hyears: getThisHebrewYear(),
+    sent7: await loadRecentSent('yahrzeit_sent7'),
+    sent1: await loadRecentSent('yahrzeit_sent1'),
+    optout,
+  };
+  const toSend: SubInfo[] = [];
+  for (const row of rows) {
+    collectRow(row, ctx, toSend);
   }
   return toSend;
 }
@@ -351,21 +395,27 @@ function lightCandlesWhen(dow: number): string {
   }
 }
 
-function makeMessage(info: SubInfo): nodemailer.SendMailOptions {
+function makeMessage(info: SubInfo): SendMailOptions {
   const type = info.type;
   const isYahrzeit = Boolean(type === 'Yahrzeit');
   const isOther = type === 'Other';
   const UTM_PARAM = `utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=${type.toLowerCase()}-reminder`;
-  const typeStr = isYahrzeit ? type : isOther ? 'Hebrew Anniversary' : `Hebrew ${type}`;
+  let typeStr = `Hebrew ${type}`;
+  if (isYahrzeit) {
+    typeStr = type;
+  } else if (isOther) {
+    typeStr = 'Hebrew Anniversary';
+  }
   const observed = info.observed as Dayjs;
   const subject = makeSubject(typeStr, observed);
   logger.info(`${info.anniversaryId} - ${info.diff} days - ${subject}`);
   const verb = isYahrzeit ? 'remembering' : 'honoring';
-  const postscript = isYahrzeit
-    ? YAHRZEIT_POSTSCRIPT
-    : type === 'Birthday'
-      ? BIRTHDAY_POSTSCRIPT
-      : '';
+  let postscript = '';
+  if (isYahrzeit) {
+    postscript = YAHRZEIT_POSTSCRIPT;
+  } else if (type === 'Birthday') {
+    postscript = BIRTHDAY_POSTSCRIPT;
+  }
   const erev = observed.subtract(1, 'day');
   const dow = erev.day();
   const when = lightCandlesWhen(dow);
@@ -377,7 +427,7 @@ as the Yahrzeit begins.`
   const hebdate = info.hd!.render('en');
   const origDt = info.day.toDate();
   const nth = calculateAnniversaryNth(origDt, info.hyear);
-  const msgid = `${info.anniversaryId}.${Date.now()}`;
+  const msgid = `${info.anniversaryId}.${Date.now().toString(36)}`;
   const returnPath = `yahrzeit-return+${info.id}.${info.hash}.${info.num}@hebcal.com`;
   const urlBase = 'https://www.hebcal.com/yahrzeit';
   const editUrl = `${urlBase}/edit/${info.calendarId}?${UTM_PARAM}#form`;
@@ -388,7 +438,7 @@ as the Yahrzeit begins.`
   const prefix = isOther
     ? info.name
     : `Hebcal joins you in ${verb} ${info.name}, whose ${nth} ${typeStr}`;
-  const message: nodemailer.SendMailOptions = {
+  const message: SendMailOptions = {
     to: emailAddress,
     from: 'Hebcal <shabbat-owner@hebcal.com>',
     replyTo: 'no-reply@hebcal.com',
@@ -425,7 +475,12 @@ ${imgOpen}
   if (isYahrzeit) {
     const dt = erev.toDate();
     const dow = erev.day();
-    const eventTimeStr = dow === 6 ? '20:00' : dow === 5 ? '14:30' : '16:30';
+    let eventTimeStr = '16:30';
+    if (dow === 6) {
+      eventTimeStr = '20:00';
+    } else if (dow === 5) {
+      eventTimeStr = '14:30';
+    }
     const ev = new Event(new HDate(dt), `${info.name} ${typeStr} reminder`, flags.USER_EVENT, {
       eventTime: dt,
       eventTimeStr,

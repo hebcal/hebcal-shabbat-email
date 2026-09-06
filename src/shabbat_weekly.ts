@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import {flock} from 'fs-ext';
 import {parseArgs} from 'node:util';
 import nodemailer from 'nodemailer';
+import type {SendMailOptions, SentMessageInfo, Transporter} from 'nodemailer';
 import pino from 'pino';
 import {
   getLogLevel,
@@ -145,11 +146,14 @@ async function mainInner(
   logger.info(`Sorting ${subs.size} users by lat/long`);
   const cfgs = Array.from(subs.values());
   cfgs.sort(compareConfigs);
-  const transporter = argv.dryrun
-    ? null
-    : argv.localhost
-      ? nodemailer.createTransport({host: 'localhost', port: 25})
-      : makeTransporter(config);
+  let transporter: Transporter | null;
+  if (argv.dryrun) {
+    transporter = null;
+  } else if (argv.localhost) {
+    transporter = nodemailer.createTransport({host: 'localhost', port: 25});
+  } else {
+    transporter = makeTransporter(config);
+  }
   const logFilename = argv.dryrun ? '/dev/null' : sentLogFilename;
   const logStream = fs.createWriteStream(logFilename, {flags: 'a'});
   const count = cfgs.length;
@@ -196,14 +200,10 @@ type SubjectAndBody = [
   specialNoteTxt: string,
 ];
 
-function writeLogLine(
-  logStream: fs.WriteStream,
-  cfg: CandleConfig,
-  info: nodemailer.SentMessageInfo
-) {
+function writeLogLine(logStream: fs.WriteStream, cfg: CandleConfig, info: SentMessageInfo) {
   const location = cfg.zip || cfg.geonameid || cfg.legacyCity;
   const mid = info.messageId.substring(1, info.messageId.indexOf('@'));
-  const status = Number(info.response.startsWith('250'));
+  const status = Number(info.response?.startsWith('250') ?? false);
   logStream.write(`${mid}:${status}:${cfg.email}:${location}\n`);
 }
 
@@ -223,9 +223,9 @@ function getStartAndEnd(now: Date): [dayjs.Dayjs, dayjs.Dayjs] {
  * mails the user
  */
 async function mailUser(
-  transporter: nodemailer.Transporter | null,
+  transporter: Transporter | null,
   cfg: CandleConfig
-): Promise<nodemailer.SentMessageInfo | undefined> {
+): Promise<SentMessageInfo | undefined> {
   const message = getMessage(cfg);
   if (!transporter) {
     return undefined;
@@ -236,7 +236,7 @@ async function mailUser(
 /**
  * creates a message object
  */
-function getMessage(cfg: CandleConfig): nodemailer.SendMailOptions {
+function getMessage(cfg: CandleConfig): SendMailOptions {
   const [subj, body0, htmlBody0, specialNote, specialNoteTxt] = getSubjectAndBody(cfg);
 
   const encoded = encodeURIComponent(Buffer.from(cfg.email).toString('base64'));
@@ -256,7 +256,7 @@ To modify your subscription or to unsubscribe completely, visit:
 ${unsubUrl}
 `;
 
-  const msgid = cfg.id + '.' + Date.now();
+  const msgid = cfg.id + '.' + Date.now().toString(36);
   const openUrl =
     `https://www.hebcal.com/email/open?msgid=${msgid}` +
     '&loc=' +
@@ -366,80 +366,121 @@ function getSubjectAndBody(cfg: CandleConfig): SubjectAndBody {
 const BLANK = '<div>&nbsp;</div>';
 const ITEM_STYLE = 'padding-left:8px;margin-bottom:2px';
 
+/** Mutable text/HTML accumulator threaded through the per-event renderers. */
+type BodyAccumulator = {
+  body: string;
+  htmlBody: string;
+  firstCandles?: string;
+  sedra?: string;
+  prevStrtime?: string;
+};
+
+/** Emits the date sub-heading when we cross into a new calendar day. */
+function appendDateHeader(acc: BodyAccumulator, strtime: string): void {
+  if (strtime === acc.prevStrtime) {
+    return;
+  }
+  if (acc.htmlBody !== '') {
+    acc.htmlBody += `${BLANK}\n`;
+    acc.body += '\n';
+  }
+  acc.htmlBody += `<div style="font-size:14px;color:#941003;font-family:arial,helvetica,sans-serif">${strtime}</div>\n`;
+  acc.body += `${strtime}\n`;
+  acc.prevStrtime = strtime;
+}
+
+function appendTimedEvent(
+  acc: BodyAccumulator,
+  ev: TimedEvent,
+  title: string,
+  title1: string,
+  mask: number,
+  emoji: string | null,
+  options: CalOptions
+): void {
+  const desc = ev.getDesc();
+  const hourMin = HebrewCalendar.reformatTimeStr(ev.eventTimeStr, 'pm', options);
+  if (!acc.firstCandles && desc === 'Candle lighting') {
+    acc.firstCandles = hourMin;
+  }
+  const verb = desc === 'Candle lighting' || desc === 'Havdalah' ? ' is' : '';
+  acc.body += `  ${title}${verb} at ${hourMin}\n`;
+  const emojiSuffix = mask & flags.CHANUKAH_CANDLES ? ` ${emoji}` : '';
+  acc.htmlBody += `<div style="${ITEM_STYLE}">${title1}${verb} at <strong>${hourMin}</strong>${emojiSuffix}</div>\n`;
+}
+
+function appendParsha(
+  acc: BodyAccumulator,
+  ev: Event,
+  title: string,
+  title1: string,
+  options: CalOptions
+): void {
+  acc.sedra = title.substring(title.indexOf(' ') + 1);
+  acc.body += `  Torah portion: ${title}\n`;
+  const url2 = urlEncodeAndTrack(ev.url()!, options.il);
+  acc.htmlBody += `<div style="${ITEM_STYLE}">Torah portion: <a href="${url2}">${title1}</a></div>\n`;
+}
+
+function appendHoliday(
+  acc: BodyAccumulator,
+  ev: Event,
+  dt: dayjs.Dayjs,
+  title: string,
+  title1: string,
+  mask: number,
+  emoji: string | null,
+  options: CalOptions
+): void {
+  const ev1 = ev as HolidayEvent;
+  if (dt.day() === 6 && !acc.sedra && (mask & flags.CHAG || ev1.cholHaMoedDay)) {
+    acc.sedra = ev.basename();
+  }
+  acc.body += `  ${title}\n`;
+  const url = ev.url();
+  acc.htmlBody += `<div style="${ITEM_STYLE}">`;
+  if (url) {
+    const url2 = urlEncodeAndTrack(url, options.il);
+    acc.htmlBody += `<a href="${url2}">${title1}</a>`;
+  } else {
+    acc.htmlBody += title1;
+  }
+  const emojiSuffix = emoji ? ` ${emoji}` : '';
+  acc.htmlBody += `${emojiSuffix}</div>\n`;
+}
+
 function genSubjectAndBody(
   events: Event[],
   options: CalOptions,
   cfg: CandleConfig
 ): SubjectAndBody {
-  let body = '';
-  let htmlBody = '';
-  let firstCandles: string | undefined;
-  let sedra: string | undefined;
-  let prevStrtime: string | undefined;
+  const acc: BodyAccumulator = {body: '', htmlBody: ''};
   for (const ev of events) {
     const ev0 = ev as TimedEvent;
     const timed = Boolean(ev0.eventTime);
     const title = timed ? ev.renderBrief(options.locale) : ev.render(options.locale);
     const title1 = title.replaceAll("'", '’');
-    const desc = ev.getDesc();
-    const hd = ev.getDate();
-    const dt = dayjs(hd.greg());
+    const dt = dayjs(ev.getDate().greg());
     const mask = ev.getFlags();
-    const strtime = dt.format(FORMAT_DOW_MONTH_DAY);
-    if (strtime !== prevStrtime) {
-      if (htmlBody !== '') {
-        htmlBody += `${BLANK}\n`;
-        body += '\n';
-      }
-      htmlBody += `<div style="font-size:14px;color:#941003;font-family:arial,helvetica,sans-serif">${strtime}</div>\n`;
-      body += `${strtime}\n`;
-      prevStrtime = strtime;
-    }
+    appendDateHeader(acc, dt.format(FORMAT_DOW_MONTH_DAY));
     const emoji = ev.getEmoji();
     if (timed) {
-      const eventTimeStr: string = ev0.eventTimeStr;
-      const hourMin = HebrewCalendar.reformatTimeStr(eventTimeStr, 'pm', options);
-      if (!firstCandles && desc === 'Candle lighting') {
-        firstCandles = hourMin;
-      }
-      const verb = desc === 'Candle lighting' || desc === 'Havdalah' ? ' is' : '';
-      body += `  ${title}${verb} at ${hourMin}\n`;
-      const emojiSuffix = mask & flags.CHANUKAH_CANDLES ? ` ${emoji}` : '';
-      htmlBody += `<div style="${ITEM_STYLE}">${title1}${verb} at <strong>${hourMin}</strong>${emojiSuffix}</div>\n`;
+      appendTimedEvent(acc, ev0, title, title1, mask, emoji, options);
     } else if (mask === flags.PARSHA_HASHAVUA) {
-      sedra = title.substring(title.indexOf(' ') + 1);
-      body += `  Torah portion: ${title}\n`;
-      const url = ev.url();
-      const url2 = urlEncodeAndTrack(url!, options.il);
-      htmlBody += `<div style="${ITEM_STYLE}">Torah portion: <a href="${url2}">${title1}</a></div>\n`;
+      appendParsha(acc, ev, title, title1, options);
     } else {
-      const dow = dt.day();
-      const ev1 = ev as HolidayEvent;
-      if (dow === 6 && !sedra && (mask & flags.CHAG || ev1.cholHaMoedDay)) {
-        sedra = ev.basename();
-      }
-      body += `  ${title}\n`;
-      const url = ev.url();
-      htmlBody += `<div style="${ITEM_STYLE}">`;
-      if (url) {
-        const url2 = urlEncodeAndTrack(url, options.il);
-        htmlBody += `<a href="${url2}">${title1}</a>`;
-      } else {
-        htmlBody += title1;
-      }
-      const emojiSuffix = emoji ? ` ${emoji}` : '';
-      htmlBody += `${emojiSuffix}</div>\n`;
+      appendHoliday(acc, ev, dt, title, title1, mask, emoji, options);
     }
   }
   const shortLocation = cfg.location.getShortName();
   let subject = '🕯️';
-  if (sedra) subject += ` ${sedra} -`;
+  if (acc.sedra) subject += ` ${acc.sedra} -`;
   subject += ' ' + shortLocation;
-  if (firstCandles) subject += ` candles ${firstCandles}`;
+  if (acc.firstCandles) subject += ` candles ${acc.firstCandles}`;
 
   const [specialNoteTxt, specialNote] = getSpecialNote(cfg, TODAY0);
 
-  return [subject, body, htmlBody, specialNote, specialNoteTxt];
+  return [subject, acc.body, acc.htmlBody, specialNote, specialNoteTxt];
 }
 
 const UTM_CAMPAIGN = '&utm_campaign=shabbat-weekly';
@@ -534,7 +575,12 @@ function getLocation(cfg: CandleConfig): Location | null {
 function parseConfig(to: string, cfg: CandleConfig): boolean {
   const location = getLocation(cfg);
   if (!location) {
-    const src = cfg.zip ? 'zip' : cfg.geonameid ? 'geonameid' : 'legacyCity';
+    let src = 'legacyCity';
+    if (cfg.zip) {
+      src = 'zip';
+    } else if (cfg.geonameid) {
+      src = 'geonameid';
+    }
     const val = cfg.zip || cfg.geonameid || cfg.legacyCity;
     logger.warn(`Location not found: ${src}=${val}, to=${to}, id=${cfg.id}`);
     return false;
