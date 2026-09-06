@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import ini from 'ini';
 import nodemailer from 'nodemailer';
+import type {Transporter} from 'nodemailer';
 
 export function getLogLevel(argv: {verbose?: boolean; quiet?: boolean}): string {
   if (argv.verbose) return 'debug';
@@ -42,7 +43,7 @@ export const htmlToTextOptions = {
 /**
  * create reusable transporter object using the default SMTP transport
  */
-export function makeTransporter(iniConfig: Record<string, string>): nodemailer.Transporter {
+export function makeTransporter(iniConfig: Record<string, string>): Transporter {
   return nodemailer.createTransport({
     host: iniConfig['hebcal.email.shabbat.host'],
     port: 465,
@@ -115,6 +116,21 @@ export function translateSmtpStatus(smtpStatus: string): string {
     default:
       return 'unknown';
   }
+}
+
+/**
+ * SES may report a recipient as a full mailbox string —
+ * `"Display Name" <addr@example.com>`, or with an RFC 2047 encoded-word
+ * display name — rather than a bare address, chiefly on transient bounces.
+ * Extract the angle-bracket address when present and lower-case it so the
+ * value matches `hebcal_shabbat_email.email_address`.
+ */
+export function normalizeEmailAddress(addr: string): string {
+  const matches = addr.match(/^[^<]*<([^>]+)>/);
+  if (matches?.length && matches[1]) {
+    return matches[1].trim().toLowerCase();
+  }
+  return addr.trim().toLowerCase();
 }
 
 /**
