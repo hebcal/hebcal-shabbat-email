@@ -389,63 +389,53 @@ function appendDateHeader(acc: BodyAccumulator, strtime: string): void {
   acc.prevStrtime = strtime;
 }
 
-function appendTimedEvent(
-  acc: BodyAccumulator,
-  ev: TimedEvent,
-  title: string,
-  title1: string,
-  mask: number,
-  emoji: string | null,
-  options: CalOptions
-): void {
+/** Per-event values derived once in the loop and shared by the renderers. */
+type RenderedEvent = {
+  ev: Event;
+  dt: dayjs.Dayjs;
+  /** Plain-text title. */
+  title: string;
+  /** HTML title, with typographic apostrophes. */
+  title1: string;
+  mask: number;
+  emoji: string | null;
+};
+
+function appendTimedEvent(acc: BodyAccumulator, r: RenderedEvent, options: CalOptions): void {
+  const ev = r.ev as TimedEvent;
   const desc = ev.getDesc();
   const hourMin = HebrewCalendar.reformatTimeStr(ev.eventTimeStr, 'pm', options);
   if (!acc.firstCandles && desc === 'Candle lighting') {
     acc.firstCandles = hourMin;
   }
   const verb = desc === 'Candle lighting' || desc === 'Havdalah' ? ' is' : '';
-  acc.body += `  ${title}${verb} at ${hourMin}\n`;
-  const emojiSuffix = mask & flags.CHANUKAH_CANDLES ? ` ${emoji}` : '';
-  acc.htmlBody += `<div style="${ITEM_STYLE}">${title1}${verb} at <strong>${hourMin}</strong>${emojiSuffix}</div>\n`;
+  acc.body += `  ${r.title}${verb} at ${hourMin}\n`;
+  const emojiSuffix = r.mask & flags.CHANUKAH_CANDLES ? ` ${r.emoji}` : '';
+  acc.htmlBody += `<div style="${ITEM_STYLE}">${r.title1}${verb} at <strong>${hourMin}</strong>${emojiSuffix}</div>\n`;
 }
 
-function appendParsha(
-  acc: BodyAccumulator,
-  ev: Event,
-  title: string,
-  title1: string,
-  options: CalOptions
-): void {
-  acc.sedra = title.substring(title.indexOf(' ') + 1);
-  acc.body += `  Torah portion: ${title}\n`;
-  const url2 = urlEncodeAndTrack(ev.url()!, options.il);
-  acc.htmlBody += `<div style="${ITEM_STYLE}">Torah portion: <a href="${url2}">${title1}</a></div>\n`;
+function appendParsha(acc: BodyAccumulator, r: RenderedEvent, options: CalOptions): void {
+  acc.sedra = r.title.substring(r.title.indexOf(' ') + 1);
+  acc.body += `  Torah portion: ${r.title}\n`;
+  const url2 = urlEncodeAndTrack(r.ev.url()!, options.il);
+  acc.htmlBody += `<div style="${ITEM_STYLE}">Torah portion: <a href="${url2}">${r.title1}</a></div>\n`;
 }
 
-function appendHoliday(
-  acc: BodyAccumulator,
-  ev: Event,
-  dt: dayjs.Dayjs,
-  title: string,
-  title1: string,
-  mask: number,
-  emoji: string | null,
-  options: CalOptions
-): void {
-  const ev1 = ev as HolidayEvent;
-  if (dt.day() === 6 && !acc.sedra && (mask & flags.CHAG || ev1.cholHaMoedDay)) {
+function appendHoliday(acc: BodyAccumulator, r: RenderedEvent, options: CalOptions): void {
+  const ev = r.ev as HolidayEvent;
+  if (r.dt.day() === 6 && !acc.sedra && (r.mask & flags.CHAG || ev.cholHaMoedDay)) {
     acc.sedra = ev.basename();
   }
-  acc.body += `  ${title}\n`;
+  acc.body += `  ${r.title}\n`;
   const url = ev.url();
   acc.htmlBody += `<div style="${ITEM_STYLE}">`;
   if (url) {
     const url2 = urlEncodeAndTrack(url, options.il);
-    acc.htmlBody += `<a href="${url2}">${title1}</a>`;
+    acc.htmlBody += `<a href="${url2}">${r.title1}</a>`;
   } else {
-    acc.htmlBody += title1;
+    acc.htmlBody += r.title1;
   }
-  const emojiSuffix = emoji ? ` ${emoji}` : '';
+  const emojiSuffix = r.emoji ? ` ${r.emoji}` : '';
   acc.htmlBody += `${emojiSuffix}</div>\n`;
 }
 
@@ -456,20 +446,23 @@ function genSubjectAndBody(
 ): SubjectAndBody {
   const acc: BodyAccumulator = {body: '', htmlBody: ''};
   for (const ev of events) {
-    const ev0 = ev as TimedEvent;
-    const timed = Boolean(ev0.eventTime);
+    const timed = Boolean((ev as TimedEvent).eventTime);
     const title = timed ? ev.renderBrief(options.locale) : ev.render(options.locale);
-    const title1 = title.replaceAll("'", '’');
-    const dt = dayjs(ev.getDate().greg());
-    const mask = ev.getFlags();
-    appendDateHeader(acc, dt.format(FORMAT_DOW_MONTH_DAY));
-    const emoji = ev.getEmoji();
+    const r: RenderedEvent = {
+      ev,
+      dt: dayjs(ev.getDate().greg()),
+      title,
+      title1: title.replaceAll("'", '’'),
+      mask: ev.getFlags(),
+      emoji: ev.getEmoji(),
+    };
+    appendDateHeader(acc, r.dt.format(FORMAT_DOW_MONTH_DAY));
     if (timed) {
-      appendTimedEvent(acc, ev0, title, title1, mask, emoji, options);
-    } else if (mask === flags.PARSHA_HASHAVUA) {
-      appendParsha(acc, ev, title, title1, options);
+      appendTimedEvent(acc, r, options);
+    } else if (r.mask === flags.PARSHA_HASHAVUA) {
+      appendParsha(acc, r, options);
     } else {
-      appendHoliday(acc, ev, dt, title, title1, mask, emoji, options);
+      appendHoliday(acc, r, options);
     }
   }
   const shortLocation = cfg.location.getShortName();
