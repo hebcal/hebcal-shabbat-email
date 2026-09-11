@@ -154,8 +154,9 @@ node_exporter package ever moves its directory:
 
 Both directories must be writable by the user the cron jobs run as. On the mail
 host that is `hebcal`, and the textfile directory belongs to the
-`prometheus-node-exporter` package, so it carries group `hebcal` via
-`/etc/tmpfiles.d/hebcal-email-metrics.conf` in `hebcal-devops`. A metrics
+`prometheus-node-exporter` package, so it carries group `hebcal` via a
+`dpkg-statoverride` registered by `usr/local/bin/hebcal_email_metrics_perms.sh`
+in `hebcal-devops` — run that script as root to repair it. A metrics
 failure never fails a mail run — the job logs one warning naming the remedy and
 carries on — so `metrics: giving up on this run` in the log is the thing to
 grep for when a panel goes flat.

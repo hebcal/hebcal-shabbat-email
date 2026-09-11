@@ -377,9 +377,9 @@ export class Metrics {
       return (
         `This is a permissions problem, not a transient one, and it will repeat every run: ` +
         `${this.textfileDir} must be writable by this process's user, and ` +
-        `${this.stateDir} must be owned by it. On the mail host both are declared in ` +
-        `/etc/tmpfiles.d/hebcal-email-metrics.conf (hebcal-devops); ` +
-        `\`systemd-tmpfiles --create\` on that file repairs them.`
+        `${this.stateDir} must be owned by it. On the mail host, running ` +
+        `/usr/local/bin/hebcal_email_metrics_perms.sh (hebcal-devops) as root repairs both; ` +
+        `if it reports a missing group, that is the cause.`
       );
     }
     if (code === 'ENOSPC') {

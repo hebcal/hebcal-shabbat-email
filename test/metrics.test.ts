@@ -195,7 +195,10 @@ describe('Metrics', () => {
       expect(() => m.finish('success')).not.toThrow();
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain('permissions problem');
-      expect(warnings[0]).toContain('tmpfiles');
+      // The remedy, not just the diagnosis: this line is the whole interface
+      // between a broken deploy and whoever greps the log.
+      expect(warnings[0]).toContain('hebcal_email_metrics_perms.sh');
+      expect(warnings[0]).toContain('missing group');
       // Disabled after the first failure: one warning per run, not one per
       // flush -- shabbat_weekly flushes every 200 messages.
       m.inc('hebcal_email_bounces_total', {reason: 'spam'});
