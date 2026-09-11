@@ -10,6 +10,7 @@ import {
   translateSmtpStatus,
 } from './common.js';
 import {LOGDIR, dirIfExistsOrCwd, makeDb, MysqlDb} from './makedb.js';
+import {Metrics} from './metrics.js';
 
 const {values: argv} = parseArgs({
   options: {
@@ -23,6 +24,8 @@ const logger = pino({
   level: getLogLevel(argv),
 });
 const config = readIniConfig(argv.ini);
+// This job has no --dryrun: it either drains the queues or it does not run.
+const metrics = new Metrics('shabbat_bounce_sqs', {logger});
 
 let logdir: string;
 
@@ -135,6 +138,9 @@ async function recordBounceNotification(innerMsg: any, db: MysqlDb, sql: string)
     }
     logger.info(`Bounce: ${emailAddress} ${stdReason}`);
     innerMsg.hebcal.stdReason = stdReason;
+    // Labelled by the same std_reason enum the row is stored under, so a
+    // dashboard panel and a `SELECT std_reason, COUNT(*)` agree.
+    metrics.inc('hebcal_email_bounces_total', {reason: stdReason});
     await db.query(sql, [emailAddress, stdReason, recip.diagnosticCode]);
   } else if (innerMsg.notificationType === 'Complaint') {
     const emailAddress = normalizeEmailAddress(
@@ -143,9 +149,11 @@ async function recordBounceNotification(innerMsg: any, db: MysqlDb, sql: string)
     const stdReason = 'amzn_abuse';
     logger.info(`Complaint: ${emailAddress} ${stdReason}`);
     innerMsg.hebcal.stdReason = stdReason;
+    metrics.inc('hebcal_email_bounces_total', {reason: stdReason});
     await db.query(sql, [emailAddress, stdReason, stdReason]);
   } else {
     logger.warn(`Ignoring unknown bounce message ${innerMsg.notificationType}`);
+    metrics.inc('hebcal_email_bounce_notifications_ignored_total');
     innerMsg.hebcal.ignored = true;
     console.log(innerMsg);
   }
@@ -191,6 +199,7 @@ async function readBounceQueue(sqs: SQSClient, db: MysqlDb) {
       return endLogStream(bounceLogStream);
     }
     logger.debug(`Processing ${response.Messages.length} bounce messages`);
+    metrics.inc('hebcal_email_sqs_messages_total', {queue: 'bounce'}, response.Messages.length);
     for (const message of response.Messages) {
       await processBounceMessage(message, db, sql, bounceLogStream);
     }
@@ -249,6 +258,7 @@ async function readUnsubQueue(sqs: SQSClient, db: MysqlDb) {
       return endLogStream(subsLogStream);
     }
     logger.debug(`Processing ${response.Messages.length} unsubscribe messages`);
+    metrics.inc('hebcal_email_sqs_messages_total', {queue: 'unsub'}, response.Messages.length);
     for (const message of response.Messages) {
       await processUnsubMessage(message, db, subsLogStream);
     }
@@ -307,6 +317,7 @@ async function unsubscribe(
   }
   if (!rows?.length) {
     logMessage.code = 'unsub_notfound';
+    metrics.inc('hebcal_email_unsubscribes_total', {result: logMessage.code});
     logStream.write(JSON.stringify(logMessage));
     logStream.write('\n');
     return errorMail(emailAddress);
@@ -316,12 +327,14 @@ async function unsubscribe(
   logMessage.from = origEmail;
   if (row.email_status === 'unsubscribed') {
     logMessage.code = 'unsub_twice';
+    metrics.inc('hebcal_email_unsubscribes_total', {result: logMessage.code});
     logStream.write(JSON.stringify(logMessage));
     logStream.write('\n');
     return errorMail(origEmail);
   }
   logMessage.status = 1;
   logMessage.code = 'unsub';
+  metrics.inc('hebcal_email_unsubscribes_total', {result: logMessage.code});
   logStream.write(JSON.stringify(logMessage));
   logStream.write('\n');
   const sql2 = "UPDATE hebcal_shabbat_email SET email_status='unsubscribed' WHERE email_id = ?";
@@ -348,8 +361,10 @@ async function main() {
 
 try {
   await main();
+  metrics.finish('success');
   logger.info('Success!');
 } catch (err) {
   logger.fatal(err);
+  metrics.finish('failure');
   process.exit(1);
 }

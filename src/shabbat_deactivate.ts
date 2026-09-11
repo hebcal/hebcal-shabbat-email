@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import pino from 'pino';
 import {parseArgs} from 'node:util';
 import {LOGDIR, makeDb, dirIfExistsOrCwd, MysqlDb} from './makedb.js';
+import {Metrics} from './metrics.js';
 import {getLogLevel, readIniConfig} from './common.js';
 
 const PROG = 'shabbat_deactivate.js';
@@ -30,13 +31,19 @@ const logger = pino({
   level: getLogLevel(argv),
 });
 const config = readIniConfig(argv.ini);
+const metrics = new Metrics('shabbat_deactivate', {logger, enabled: !argv.dryrun});
 let logdir: string;
 
 async function main() {
   const db = makeDb(logger, config);
   logdir = await dirIfExistsOrCwd(LOGDIR);
-  const addrs = await getCandidates(db);
+  const candidates = await getCandidates(db);
+  const addrs = Array.from(candidates.keys());
   logger.info(`Deactivating ${addrs.length} subscriptions`);
+  metrics.setGauge('hebcal_email_deactivate_candidates', {}, addrs.length);
+  for (const reason of candidates.values()) {
+    metrics.inc('hebcal_email_deactivated_total', {reason});
+  }
   if (!argv.dryrun && addrs.length) {
     await deactivateSubs(db, addrs);
   }
@@ -77,7 +84,14 @@ async function deactivateSubs(db: MysqlDb, addrs: string[]) {
   });
 }
 
-async function getCandidates(db: MysqlDb): Promise<string[]> {
+/**
+ * Returns the addresses to deactivate, mapped to the bounce reason that tripped
+ * the threshold. An address can appear under several std_reason values; keeping
+ * only the first means summing hebcal_email_deactivated_total over `reason`
+ * gives the number of addresses deactivated, not the number of (address,
+ * reason) pairs.
+ */
+async function getCandidates(db: MysqlDb): Promise<Map<string, string>> {
   const reasonsSql = reasons.join("','");
   const sql = `
 SELECT b.email_address,std_reason,count(1) as count
@@ -88,14 +102,16 @@ AND DATEDIFF(NOW(), b.timestamp) < 365
 GROUP by b.email_address,std_reason`;
   logger.info(sql);
   const results = await db.query(sql);
-  const addrs: string[] = [];
+  const addrs = new Map<string, string>();
   for (const row0 of results) {
     const row = row0 as any;
     if (row.count > countThreshold || row.std_reason === 'amzn_abuse') {
       if (!argv.quiet) {
         logger.info(`${row.email_address} (${row.count} bounces)`);
       }
-      addrs.push(row.email_address);
+      if (!addrs.has(row.email_address)) {
+        addrs.set(row.email_address, row.std_reason);
+      }
     }
   }
   return addrs;
@@ -118,8 +134,10 @@ Options:
 
 try {
   await main();
+  metrics.finish('success');
   logger.info('Success!');
 } catch (err) {
   logger.fatal(err);
+  metrics.finish('failure');
   process.exit(1);
 }

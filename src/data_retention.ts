@@ -2,6 +2,7 @@ import pino from 'pino';
 import {ResultSetHeader} from 'mysql2';
 import {parseArgs} from 'node:util';
 import {makeDb, MysqlDb} from './makedb.js';
+import {Metrics} from './metrics.js';
 import {getLogLevel, readIniConfig} from './common.js';
 
 const PROG = 'data_retention.js';
@@ -56,6 +57,7 @@ const logger = pino({
   level: getLogLevel(argv),
 });
 const config = readIniConfig(argv.ini);
+const metrics = new Metrics('data_retention', {logger, enabled: !argv.dryrun});
 const retentionMonths = argv.months ? Number.parseInt(argv.months, 10) : RETENTION_MONTHS_DEFAULT;
 
 async function main() {
@@ -75,6 +77,7 @@ async function pruneTable(db: MysqlDb, table: string, column: string) {
   const countResult = await db.query(countSql);
   const count = countResult[0].cnt;
   logger.info(`${table}: ${count} rows older than ${retentionMonths} months`);
+  metrics.setGauge('hebcal_email_retention_rows_expired', {table}, count);
   if (count === 0) {
     return;
   }
@@ -100,6 +103,7 @@ async function pruneInactiveSubscribers(db: MysqlDb, tbl: InactiveTable) {
   const countResult = await db.query(countSql, statuses);
   const count = countResult[0].cnt;
   logger.info(`${table}: ${count} inactive rows older than ${retentionMonths} months`);
+  metrics.setGauge('hebcal_email_retention_rows_expired', {table}, count);
   if (count === 0) {
     return;
   }
@@ -125,6 +129,11 @@ async function batchDelete(db: MysqlDb, table: string, deleteSql: string, params
     totalDeleted += affected;
     if (affected > 0) {
       logger.info(`${table}: deleted batch of ${affected} rows`);
+      // Per batch rather than per table: the purge deletes in 50k chunks and
+      // can run for a while, so a run killed halfway still leaves an accurate
+      // count of what it actually removed.
+      metrics.inc('hebcal_email_retention_rows_deleted_total', {table}, affected);
+      metrics.flush();
     }
   } while (affected > 0);
   logger.info(`${table}: deleted ${totalDeleted} rows total`);
@@ -147,8 +156,10 @@ Options:
 
 try {
   await main();
+  metrics.finish('success');
   logger.info('Success!');
 } catch (err) {
   logger.fatal(err);
+  metrics.finish('failure');
   process.exit(1);
 }
