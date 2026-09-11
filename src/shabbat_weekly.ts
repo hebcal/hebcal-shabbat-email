@@ -23,6 +23,7 @@ import {
   shouldSendEmailToday,
 } from './common.js';
 import {LOGDIR, dirIfExistsOrCwd, makeDb} from './makedb.js';
+import {Metrics} from './metrics.js';
 import {getSpecialNote} from './specialNote.js';
 import {urlEncodeAndTrack} from './tracking.js';
 import {RowDataPacket} from 'mysql2';
@@ -54,11 +55,19 @@ const logger = pino({
   level: getLogLevel(argv),
 });
 
+// --dryrun builds every message but sends nothing, so its counts are not real
+// traffic and must not land in the durable totals.
+const metrics = new Metrics('shabbat_weekly', {logger, enabled: !argv.dryrun});
+
 const TODAY0 = dayjs(argv.date); // undefined => new Date()
 const TODAY = TODAY0.toDate();
 logger.debug(`Today is ${TODAY0.format('dddd')}`);
 if (!shouldSendEmailToday(TODAY0) && !argv.force) {
   logger.debug('Exiting...');
+  // Cron fires this Tue/Wed/Thu and it sends on exactly one of them, so most
+  // invocations land here. Record them: a run that stops being scheduled at all
+  // looks identical to one that skipped, unless the skips are counted.
+  metrics.finish('skipped');
   process.exit(0);
 }
 const [midnight, endOfWeek] = getStartAndEnd(TODAY);
@@ -83,13 +92,16 @@ async function main() {
   const friday = TODAY0.add(5 - dow, 'day');
   const sentLogFilename = logdir + '/shabbat-' + friday.format('YYYYMMDD');
 
+  let skipped = 0;
   if (!argv.force) {
     const alreadySent = loadSentLog(sentLogFilename);
     if (alreadySent.size > 0) {
+      skipped = alreadySent.size;
       logger.info(`Skipping ${alreadySent.size} users from previous run`);
       alreadySent.forEach(x => subs.delete(x));
     }
   }
+  metrics.setGauge('hebcal_email_shabbat_skipped_already_sent', {}, skipped);
 
   return new Promise<boolean>((resolve, reject) => {
     const lockfile = fs.openSync('/tmp/hebcal-shabbat-weekly.lock', 'w');
@@ -157,16 +169,25 @@ async function mainInner(
   const logFilename = argv.dryrun ? '/dev/null' : sentLogFilename;
   const logStream = fs.createWriteStream(logFilename, {flags: 'a'});
   const count = cfgs.length;
+  metrics.setGauge('hebcal_email_shabbat_recipients', {}, count);
   logger.info(`About to mail ${count} users`);
   let i = 0;
   for (const cfg of cfgs) {
     if (i % 200 === 0 || i === count - 1) {
       const cityDescr = cfg.location.getName();
       logger.info(`Sending mail #${i + 1}/${count} (${cityDescr})`);
+      // Piggy-backs on the existing progress-log cadence. A full send takes
+      // the better part of an hour, and folding the deltas in as we go means
+      // the dashboard tracks it live and a crash costs at most 200 messages
+      // of counter, instead of the whole run.
+      metrics.flush();
     }
     const info = await mailUser(transporter, cfg);
     if (!argv.dryrun) {
-      writeLogLine(logStream, cfg, info!);
+      const accepted = writeLogLine(logStream, cfg, info!);
+      metrics.inc(
+        accepted ? 'hebcal_email_shabbat_sent_total' : 'hebcal_email_shabbat_send_failures_total'
+      );
       if (sleeptime && i !== count - 1) {
         msleep(sleeptime);
       }
@@ -200,11 +221,17 @@ type SubjectAndBody = [
   specialNoteTxt: string,
 ];
 
-function writeLogLine(logStream: fs.WriteStream, cfg: CandleConfig, info: SentMessageInfo) {
+/** Appends the sent-log line and reports whether the relay accepted it. */
+function writeLogLine(
+  logStream: fs.WriteStream,
+  cfg: CandleConfig,
+  info: SentMessageInfo
+): boolean {
   const location = cfg.zip || cfg.geonameid || cfg.legacyCity;
   const mid = info.messageId.substring(1, info.messageId.indexOf('@'));
-  const status = Number(info.response?.startsWith('250') ?? false);
-  logStream.write(`${mid}:${status}:${cfg.email}:${location}\n`);
+  const accepted = info.response?.startsWith('250') ?? false;
+  logStream.write(`${mid}:${Number(accepted)}:${cfg.email}:${location}\n`);
+  return accepted;
 }
 
 /**
@@ -499,6 +526,7 @@ AND email_ip IS NOT NULL
 ${allSql}`;
   logger.info(sql);
   const results = await db.query(sql);
+  metrics.setGauge('hebcal_email_shabbat_subscribers_loaded', {}, results.length);
   const subs = new Map<string, CandleConfig>();
   for (const row of results) {
     const cfg = makeCandlesCfg(row);
@@ -529,6 +557,7 @@ function makeCandlesCfg(row: RowDataPacket): CandleConfig | null {
     cfg.legacyCity = row.email_candles_city.replaceAll('+', ' ');
   } else {
     logger.warn(`no geographic key: to=${email}, id=${cfg.id}`);
+    metrics.inc('hebcal_email_shabbat_config_failures_total', {reason: 'no_geographic_key'});
     return null;
   }
   return cfg;
@@ -576,12 +605,15 @@ function parseConfig(to: string, cfg: CandleConfig): boolean {
     }
     const val = cfg.zip || cfg.geonameid || cfg.legacyCity;
     logger.warn(`Location not found: ${src}=${val}, to=${to}, id=${cfg.id}`);
+    metrics.inc('hebcal_email_shabbat_config_failures_total', {reason: 'location_not_found'});
     return false;
   } else if (location.getLongitude() === 0 && location.getLatitude() === 0) {
     logger.warn(`Suspicious zero lat/long: to=${to}, id=${cfg.id}`);
+    metrics.inc('hebcal_email_shabbat_config_failures_total', {reason: 'zero_lat_long'});
     return false;
   } else if (!location.getTzid()) {
     logger.warn(`Unknown tzid: to=${to}, id=${cfg.id}`);
+    metrics.inc('hebcal_email_shabbat_config_failures_total', {reason: 'unknown_tzid'});
     return false;
   }
 
@@ -640,8 +672,10 @@ Options:
 try {
   await main();
   geoDb.close();
+  metrics.finish('success');
   logger.info('Success!');
 } catch (err) {
   logger.fatal(err);
+  metrics.finish('failure');
   process.exit(1);
 }

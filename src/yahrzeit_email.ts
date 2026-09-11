@@ -6,6 +6,7 @@ import {parseArgs} from 'node:util';
 import nodemailer from 'nodemailer';
 import type {SendMailOptions, Transporter} from 'nodemailer';
 import {makeDb, MysqlDb} from './makedb.js';
+import {Metrics} from './metrics.js';
 import {
   getLogLevel,
   getChagOnDate,
@@ -45,6 +46,10 @@ const logger = pino({
   level: getLogLevel(argv),
 });
 
+// --dryrun reports a synthetic 250 for every message, so its counts would be
+// fiction in the durable totals.
+const metrics = new Metrics('yahrzeit_email', {logger, enabled: !argv.dryrun});
+
 let transporter: Transporter;
 let db: MysqlDb;
 
@@ -52,6 +57,9 @@ const today = dayjs(argv.date); // undefined => new Date()
 logger.debug(`Today is ${today.format('dddd')}`);
 const chag = getChagOnDate(today);
 if ((chag || today.day() === 6) && !argv.force) {
+  // Cron fires Sun-Fri; Yom Tov takes days out of that. Counting the skips
+  // keeps "did not mail today" distinguishable from "cron stopped running".
+  metrics.finish('skipped');
   process.exit(0);
 }
 
@@ -114,6 +122,12 @@ AND e.calendar_id = y.id`;
 
   logger.debug(sql);
   const rows = await db.query(sql, params);
+  // Set before the bail-out below: a sudden zero is exactly the thing worth
+  // seeing on the dashboard, and skipping the gauge would leave the previous
+  // run's healthy number standing.
+  if (!argv.email) {
+    metrics.setGauge('hebcal_email_yahrzeit_subscriptions_loaded', {}, rows?.length ?? 0);
+  }
   if (!rows?.length) {
     logger.error('Got zero rows from DB!?');
     await db.close();
@@ -124,6 +138,7 @@ AND e.calendar_id = y.id`;
   const optout: StringDateMap = await loadOptOut();
   const toSend = await loadSubsFromDb(rows, optout);
 
+  metrics.setGauge('hebcal_email_yahrzeit_reminders_due', {}, toSend.length);
   logger.debug(`Processing ${toSend.length} messages`);
   for (const info of toSend) {
     const status = await processAnniversary(info);
@@ -318,6 +333,7 @@ async function loadOptOut(): Promise<StringDateMap> {
   logger.debug(sql);
   const rows = await db.query(sql);
   logger.info(`Loaded ${rows.length} opt_out from DB`);
+  metrics.setGauge('hebcal_email_yahrzeit_optout_rules', {}, rows.length);
   const optout: StringDateMap = {};
   for (const row of rows) {
     const key0 = `${row.email_id}.${row.num}`;
@@ -360,6 +376,9 @@ function computeAnniversary(info: SubInfo) {
 
 async function processAnniversary(info: SubInfo): Promise<unknown> {
   const message = makeMessage(info);
+  // Both series carry the same labels so a failure rate is a straight ratio of
+  // one over the sum of the two.
+  const labels = {type: info.type, reminder_days: info.reminderDays};
   let status;
   try {
     status = await sendMail(message);
@@ -375,8 +394,10 @@ async function processAnniversary(info: SubInfo): Promise<unknown> {
       }
     }
     numSent++;
+    metrics.inc('hebcal_email_yahrzeit_sent_total', labels);
   } catch (err) {
     logger.error(err);
+    metrics.inc('hebcal_email_yahrzeit_send_failures_total', labels);
     status = err;
   }
   return status;
@@ -664,11 +685,13 @@ Options:
 
 try {
   await main();
+  metrics.finish('success');
   if (numSent > 0) {
     logger.info(`Success! Sent ${numSent} messages.`);
   }
   logger.debug('Done.');
 } catch (err) {
   logger.fatal(err);
+  metrics.finish('failure');
   process.exit(1);
 }

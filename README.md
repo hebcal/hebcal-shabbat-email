@@ -71,6 +71,14 @@ sent-log, and open-tracking tables, and purges long-inactive (pending /
 unsubscribed / bounced) subscribers. `--months <n>` overrides the retention
 window; `--dryrun` reports row counts without deleting.
 
+### `metrics_textfile.js` — refresh the current-state Prometheus gauges
+
+Not on cron: driven by a systemd timer every 15 minutes (see
+[Metrics](#metrics)). Queries MySQL for the numbers that are properties of the
+database rather than of any one job — subscriber counts per list and status, the
+size of the bounce table, and the un-actioned bounce backlog by `std_reason` —
+and rewrites the `.prom` file the other scripts also write.
+
 ## Maintenance scripts (not on cron)
 
 ### `remove_dupe_subs.js`
@@ -81,9 +89,72 @@ recently updated one, skipping any calendar that has an opt-out on record.
 
 ## Shared modules
 
-`common.ts` (config loading, SMTP transport, logging, holiday helpers) and
-`makedb.ts` (a small promise wrapper around MySQL) are libraries used by the
-scripts above, not entry points.
+`common.ts` (config loading, SMTP transport, logging, holiday helpers),
+`makedb.ts` (a small promise wrapper around MySQL) and `metrics.ts` (the
+Prometheus recorder described below) are libraries used by the scripts above,
+not entry points.
+
+## Metrics
+
+Every script reports what it did to Prometheus through node_exporter's
+**textfile collector**, writing `/var/lib/prometheus/node-exporter/hebcal_email.prom`.
+
+These are short-lived cron processes, so there is nothing for Prometheus to
+scrape while they run; the usual answer (a Pushgateway) would mean a new daemon
+and a new open port on the mail host. Every hebcal droplet already runs
+node_exporter with the textfile collector enabled, so a file dropped in its
+directory arrives on the existing `:9100` scrape with the same `instance` label
+as the rest of the host metrics — no scrape config, no tag, no new listener.
+
+A counter has to be monotonic _across_ runs, and each invocation is a fresh
+process that knows only its own deltas. So the durable totals live in a small
+SQLite database (`/var/lib/hebcal-email/metrics.sqlite3`, via the standard
+library's `node:sqlite` — no new dependency), and the `.prom` file is a
+rendering of it. Every writer renders the _whole_ database and renames the
+result into place, so overlapping jobs — the five-minute SQS drain during an
+hour-long weekly send — cannot produce a partial file.
+
+`--dryrun` disables recording entirely: a dry run's counts are not real traffic.
+
+| Metric                                            | Type    | Labels                                    |
+| ------------------------------------------------- | ------- | ----------------------------------------- |
+| `hebcal_email_job_runs_total`                     | counter | `job`, `result` (success/failure/skipped) |
+| `hebcal_email_job_last_run_timestamp_seconds`     | gauge   | `job`                                     |
+| `hebcal_email_job_last_success_timestamp_seconds` | gauge   | `job`                                     |
+| `hebcal_email_job_duration_seconds`               | gauge   | `job`                                     |
+| `hebcal_email_shabbat_sent_total`                 | counter | —                                         |
+| `hebcal_email_shabbat_send_failures_total`        | counter | —                                         |
+| `hebcal_email_shabbat_subscribers_loaded`         | gauge   | —                                         |
+| `hebcal_email_shabbat_recipients`                 | gauge   | —                                         |
+| `hebcal_email_shabbat_skipped_already_sent`       | gauge   | —                                         |
+| `hebcal_email_shabbat_config_failures_total`      | counter | `reason`                                  |
+| `hebcal_email_yahrzeit_sent_total`                | counter | `type`, `reminder_days`                   |
+| `hebcal_email_yahrzeit_send_failures_total`       | counter | `type`, `reminder_days`                   |
+| `hebcal_email_yahrzeit_subscriptions_loaded`      | gauge   | —                                         |
+| `hebcal_email_yahrzeit_reminders_due`             | gauge   | —                                         |
+| `hebcal_email_yahrzeit_optout_rules`              | gauge   | —                                         |
+| `hebcal_email_sqs_messages_total`                 | counter | `queue` (bounce/unsub)                    |
+| `hebcal_email_bounces_total`                      | counter | `reason` (the `std_reason` enum)          |
+| `hebcal_email_bounce_notifications_ignored_total` | counter | —                                         |
+| `hebcal_email_unsubscribes_total`                 | counter | `result`                                  |
+| `hebcal_email_deactivated_total`                  | counter | `reason`                                  |
+| `hebcal_email_deactivate_candidates`              | gauge   | —                                         |
+| `hebcal_email_retention_rows_deleted_total`       | counter | `table`                                   |
+| `hebcal_email_retention_rows_expired`             | gauge   | `table`                                   |
+| `hebcal_email_subscribers`                        | gauge   | `list`, `status`                          |
+| `hebcal_email_bounce_table_rows`                  | gauge   | —                                         |
+| `hebcal_email_bounces_pending_deactivation`       | gauge   | `reason`                                  |
+
+`src/metrics.ts` holds the catalog, and a metric name that is not in it is never
+written — that is what keeps a typo from quietly becoming a new time series.
+
+Two environment variables override the paths, for testing or if the
+node_exporter package ever moves its directory:
+`HEBCAL_METRICS_TEXTFILE_DIR` and `HEBCAL_METRICS_STATE_DIR`.
+
+The Grafana dashboard that consumes all of this is `etc/grafana/dashboards/email.json`
+in the `hebcal-devops` repo, which is also where the systemd timer and the
+cloud-config that deploys it live.
 
 ## Configuration
 
@@ -136,3 +207,8 @@ APPDIR=/home/hebcal/hebcal-shabbat-email
 # Data-retention purge, nightly at 11:47pm.
 47 23 * * * hebcal cd $APPDIR && nice node $APPDIR/dist/data_retention.js --quiet
 ```
+
+`metrics_textfile.js` is deliberately **not** in here — it runs from the
+`hebcal-email-metrics.timer` systemd unit shipped by `hebcal-devops`, because
+its job is to keep gauges fresh on a fixed cadence rather than to do work on a
+calendar.
