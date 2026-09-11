@@ -341,7 +341,7 @@ export class Metrics {
       this.gauges.clear();
     } catch (err) {
       // Metrics are never worth failing a mail run over.
-      this.logger.warn({err}, 'metrics: giving up on this run');
+      this.logger.warn({err}, `metrics: giving up on this run. ${this.hint(err)}`);
       this.enabled = false;
     }
   }
@@ -363,6 +363,29 @@ export class Metrics {
       this.setGauge('hebcal_email_job_last_success_timestamp_seconds', job, Math.floor(now / 1000));
     }
     this.flush();
+  }
+
+  /**
+   * Turns the two failures that are configuration rather than bad luck into
+   * their own fix. Both are permanent -- they will repeat on every run until
+   * someone acts -- and both surface as a bare errno in a cron log that is not
+   * read closely, so the log line has to carry the remedy with it.
+   */
+  private hint(err: unknown): string {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code === 'EACCES' || code === 'EPERM') {
+      return (
+        `This is a permissions problem, not a transient one, and it will repeat every run: ` +
+        `${this.textfileDir} must be writable by this process's user, and ` +
+        `${this.stateDir} must be owned by it. On the mail host both are declared in ` +
+        `/etc/tmpfiles.d/hebcal-email-metrics.conf (hebcal-devops); ` +
+        `\`systemd-tmpfiles --create\` on that file repairs them.`
+      );
+    }
+    if (code === 'ENOSPC') {
+      return 'The filesystem is full; no metrics will be recorded until space is freed.';
+    }
+    return 'Set HEBCAL_METRICS_TEXTFILE_DIR / HEBCAL_METRICS_STATE_DIR to relocate these files.';
   }
 
   private persistAndRender(): void {

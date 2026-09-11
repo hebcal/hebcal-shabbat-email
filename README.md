@@ -152,6 +152,14 @@ Two environment variables override the paths, for testing or if the
 node_exporter package ever moves its directory:
 `HEBCAL_METRICS_TEXTFILE_DIR` and `HEBCAL_METRICS_STATE_DIR`.
 
+Both directories must be writable by the user the cron jobs run as. On the mail
+host that is `hebcal`, and the textfile directory belongs to the
+`prometheus-node-exporter` package, so it carries group `hebcal` via
+`/etc/tmpfiles.d/hebcal-email-metrics.conf` in `hebcal-devops`. A metrics
+failure never fails a mail run — the job logs one warning naming the remedy and
+carries on — so `metrics: giving up on this run` in the log is the thing to
+grep for when a panel goes flat.
+
 The Grafana dashboard that consumes all of this is `etc/grafana/dashboards/email.json`
 in the `hebcal-devops` repo, which is also where the systemd timer and the
 cloud-config that deploys it live.

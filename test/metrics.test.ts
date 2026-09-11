@@ -1,4 +1,4 @@
-import {afterEach, beforeEach, describe, expect, it} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -169,6 +169,57 @@ describe('Metrics', () => {
     m.inc('hebcal_email_shabbat_sent_total', {}, 1);
     m.finish('success');
     expect(readProm()).toContain('hebcal_email_shabbat_sent_total 201');
+  });
+
+  it('survives an unwritable textfile directory, and says how to fix it', () => {
+    // Reproduces the EACCES seen on the mail host, where the .prom directory
+    // was left root-owned 0755 and the cron jobs run as `hebcal`. Injected
+    // rather than provoked with chmod, because the suite may run as root --
+    // and root would simply write the file, proving nothing.
+    const denied = Object.assign(new Error('EACCES: permission denied'), {code: 'EACCES'});
+    const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {
+      throw denied;
+    });
+    const warnings: string[] = [];
+    const capturing = {
+      warn: (_obj: unknown, msg?: string) => warnings.push(msg ?? String(_obj)),
+    } as unknown as typeof logger;
+    try {
+      const m = new Metrics('shabbat_bounce_sqs', {
+        logger: capturing,
+        stateDir,
+        textfileDir,
+      });
+      m.inc('hebcal_email_bounces_total', {reason: 'spam'});
+      // The whole point: a metrics failure must not take a mail run down.
+      expect(() => m.finish('success')).not.toThrow();
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain('permissions problem');
+      expect(warnings[0]).toContain('tmpfiles');
+      // Disabled after the first failure: one warning per run, not one per
+      // flush -- shabbat_weekly flushes every 200 messages.
+      m.inc('hebcal_email_bounces_total', {reason: 'spam'});
+      m.flush();
+      expect(warnings).toHaveLength(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('cleans up its temp file when the rename fails', () => {
+    const spy = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw Object.assign(new Error('EXDEV: cross-device link'), {code: 'EXDEV'});
+    });
+    try {
+      const m = new Metrics('shabbat_weekly', {logger, stateDir, textfileDir});
+      m.inc('hebcal_email_shabbat_sent_total');
+      m.finish('success');
+    } finally {
+      spy.mockRestore();
+    }
+    // The temp file was really written before the rename threw, so this is the
+    // cleanup path and not a vacuous assertion.
+    expect(fs.readdirSync(textfileDir)).toEqual([]);
   });
 
   it('escapes quotes and backslashes in label values', () => {
