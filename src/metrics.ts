@@ -33,10 +33,24 @@ import type {Logger} from 'pino';
  * render is written to a temp file in the same directory and renamed into
  * place, because node_exporter reading a half-written file fails the *entire*
  * textfile collector, not just these metrics.
+ *
+ * Note that the .prom is written NEXT TO the SQLite file, in a directory these
+ * jobs own -- not into node_exporter's own textfile directory. That directory
+ * belongs to the prometheus-node-exporter package, which ships it root-owned
+ * and whose ownership dpkg restores on every unpack, so letting an
+ * unprivileged mail job write there requires a standing permission exception
+ * that Debian keeps taking back. A root-owned timer on the host
+ * (hebcal_email_textfile.sh in hebcal-devops) copies the finished file across
+ * every two minutes instead. Nothing here needs to know about that; this code
+ * just needs a directory it owns.
  */
 
-/** Where node_exporter's textfile collector reads from. */
-const DEFAULT_TEXTFILE_DIR = '/var/lib/prometheus/node-exporter';
+/**
+ * Where the rendered .prom is left for the host's publisher timer to pick up.
+ * Deliberately a directory these jobs own, rather than node_exporter's own
+ * textfile directory -- see the note in the module comment above.
+ */
+const DEFAULT_TEXTFILE_DIR = '/var/lib/hebcal-email';
 
 /** Durable home of the cross-run counter totals. */
 const DEFAULT_STATE_DIR = '/var/lib/hebcal-email';
@@ -376,10 +390,11 @@ export class Metrics {
     if (code === 'EACCES' || code === 'EPERM') {
       return (
         `This is a permissions problem, not a transient one, and it will repeat every run: ` +
-        `${this.textfileDir} must be writable by this process's user, and ` +
-        `${this.stateDir} must be owned by it. On the mail host, running ` +
-        `/usr/local/bin/hebcal_email_metrics_perms.sh (hebcal-devops) as root repairs both; ` +
-        `if it reports a missing group, that is the cause.`
+        `${this.stateDir} and ${this.textfileDir} must be owned by the user these jobs ` +
+        `run as. On the mail host that is \`hebcal\`, and the fix is ` +
+        `\`install -d -o hebcal -g hebcal /var/lib/hebcal-email\`. Note that nothing here ` +
+        `should be writing into node_exporter's own directory -- a root timer on the host ` +
+        `publishes the file from here.`
       );
     }
     if (code === 'ENOSPC') {

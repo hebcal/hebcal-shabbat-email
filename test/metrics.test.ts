@@ -197,8 +197,7 @@ describe('Metrics', () => {
       expect(warnings[0]).toContain('permissions problem');
       // The remedy, not just the diagnosis: this line is the whole interface
       // between a broken deploy and whoever greps the log.
-      expect(warnings[0]).toContain('hebcal_email_metrics_perms.sh');
-      expect(warnings[0]).toContain('missing group');
+      expect(warnings[0]).toContain('install -d -o hebcal -g hebcal');
       // Disabled after the first failure: one warning per run, not one per
       // flush -- shabbat_weekly flushes every 200 messages.
       m.inc('hebcal_email_bounces_total', {reason: 'spam'});
@@ -223,6 +222,22 @@ describe('Metrics', () => {
     // The temp file was really written before the rename threw, so this is the
     // cleanup path and not a vacuous assertion.
     expect(fs.readdirSync(textfileDir)).toEqual([]);
+  });
+
+  it('defaults to writing somewhere these jobs can own', () => {
+    // Regression guard with a history: the .prom used to default into
+    // node_exporter's own directory, which belongs to the
+    // prometheus-node-exporter package. dpkg restores that directory's
+    // root ownership on every unpack, so the unprivileged mail jobs lost
+    // write access repeatedly and silently. A root timer on the host now
+    // publishes the file from here; nothing in this process should ever
+    // reach into /var/lib/prometheus again.
+    const m = new Metrics('shabbat_weekly', {logger});
+    const paths = JSON.parse(JSON.stringify(m)) as {stateDir: string; textfileDir: string};
+    expect(paths.textfileDir).not.toMatch(/^\/var\/lib\/prometheus/);
+    // Both live in the one directory the jobs own, so a deploy has exactly one
+    // thing to get right.
+    expect(paths.textfileDir).toBe(paths.stateDir);
   });
 
   it('escapes quotes and backslashes in label values', () => {
