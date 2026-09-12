@@ -97,7 +97,9 @@ not entry points.
 ## Metrics
 
 Every script reports what it did to Prometheus through node_exporter's
-**textfile collector**, writing `/var/lib/prometheus/node-exporter/hebcal_email.prom`.
+**textfile collector**, writing `/var/lib/hebcal-email/hebcal_email.prom`. On the
+mail host a root-owned systemd timer copies that file into
+`/var/lib/prometheus/node-exporter/` every two minutes, where node_exporter reads it.
 
 These are short-lived cron processes, so there is nothing for Prometheus to
 scrape while they run; the usual answer (a Pushgateway) would mean a new daemon
@@ -105,6 +107,13 @@ and a new open port on the mail host. Every hebcal droplet already runs
 node_exporter with the textfile collector enabled, so a file dropped in its
 directory arrives on the existing `:9100` scrape with the same `instance` label
 as the rest of the host metrics — no scrape config, no tag, no new listener.
+
+That copy step is why the jobs write where they do. node_exporter's textfile
+directory belongs to the `prometheus-node-exporter` Debian package, which ships
+it root-owned and whose ownership dpkg restores on every unpack — so granting an
+unprivileged mail user write access there does not survive an `apt upgrade`. A
+root timer needs no permission at all. Nothing here needs to know about that
+beyond the output path.
 
 A counter has to be monotonic _across_ runs, and each invocation is a fresh
 process that knows only its own deltas. So the durable totals live in a small
@@ -152,11 +161,9 @@ Two environment variables override the paths, for testing or if the
 node_exporter package ever moves its directory:
 `HEBCAL_METRICS_TEXTFILE_DIR` and `HEBCAL_METRICS_STATE_DIR`.
 
-Both directories must be writable by the user the cron jobs run as. On the mail
-host that is `hebcal`, and the textfile directory belongs to the
-`prometheus-node-exporter` package, so it carries group `hebcal` via a
-`dpkg-statoverride` registered by `usr/local/bin/hebcal_email_metrics_perms.sh`
-in `hebcal-devops` — run that script as root to repair it. A metrics
+Both default to the same directory, which must be owned by the user the cron jobs
+run as — on the mail host, `install -d -o hebcal -g hebcal /var/lib/hebcal-email`.
+That is the only permission these jobs need anywhere. A metrics
 failure never fails a mail run — the job logs one warning naming the remedy and
 carries on — so `metrics: giving up on this run` in the log is the thing to
 grep for when a panel goes flat.
