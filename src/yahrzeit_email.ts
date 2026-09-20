@@ -516,6 +516,7 @@ ${imgOpen}
       alarm: 'P0DT0H0M0S',
       uid: `reminder-${info.anniversaryId}`,
       category: 'Personal',
+      duration: 15,
     });
     const ical = new IcalEvent(ev, {});
     const lines =
