@@ -416,6 +416,26 @@ function lightCandlesWhen(dow: number): string {
   }
 }
 
+const REMINDER_DURATION_MINUTES = 15;
+
+/**
+ * @param str iCalendar local date-time, e.g. "20260101T143000"
+ */
+function addMinutesToIcalDateTimeStr(str: string, minutesToAdd: number): string {
+  const year = +str.slice(0, 4);
+  const month = +str.slice(4, 6) - 1;
+  const day = +str.slice(6, 8);
+  const hour = +str.slice(9, 11);
+  const minute = +str.slice(11, 13);
+  const second = +str.slice(13, 15);
+  const dt = new Date(year, month, day, hour, minute + minutesToAdd, second);
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${dt.getFullYear()}${pad2(dt.getMonth() + 1)}${pad2(dt.getDate())}` +
+    `T${pad2(dt.getHours())}${pad2(dt.getMinutes())}${pad2(dt.getSeconds())}`
+  );
+}
+
 function makeMessage(info: SubInfo): SendMailOptions {
   const type = info.type;
   const isYahrzeit = Boolean(type === 'Yahrzeit');
@@ -518,6 +538,13 @@ ${imgOpen}
       category: 'Personal',
     });
     const ical = new IcalEvent(ev, {});
+    // `endDate` is `readonly` in the type declarations, but @hebcal/icalendar
+    // gives timed events a 0-minute duration (DTEND===DTSTART); give this
+    // reminder a 15-minute DURATION instead for stricter RFC 5545 compatibility.
+    (ical as unknown as {endDate: string}).endDate = addMinutesToIcalDateTimeStr(
+      ical.startDate,
+      REMINDER_DURATION_MINUTES,
+    );
     const lines =
       [
         'BEGIN:VCALENDAR',
