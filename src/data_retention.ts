@@ -1,12 +1,14 @@
 import pino from 'pino';
 import {ResultSetHeader} from 'mysql2';
+import fs from 'node:fs';
+import path from 'node:path';
 import {parseArgs} from 'node:util';
-import {makeDb, MysqlDb} from './makedb.js';
+import {LOGDIR, makeDb, MysqlDb} from './makedb.js';
 import {Metrics} from './metrics.js';
 import {getLogLevel, readIniConfig} from './common.js';
 
 const PROG = 'data_retention.js';
-const RETENTION_MONTHS_DEFAULT = 24;
+const RETENTION_MONTHS_DEFAULT = 18;
 
 const TABLES: {name: string; column: string}[] = [
   {name: 'hebcal_shabbat_bounce', column: 'timestamp'},
@@ -68,7 +70,48 @@ async function main() {
   for (const table of INACTIVE_TABLES) {
     await pruneInactiveSubscribers(db, table);
   }
-  return db.close();
+  await db.close();
+  pruneLogFiles(LOGDIR);
+}
+
+function pruneLogFiles(dir: string) {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - retentionMonths);
+  const cutoffMs = cutoff.getTime();
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, {withFileTypes: true});
+  } catch (err) {
+    logger.warn(err, `${dir}: cannot read directory, skipping log file cleanup`);
+    return;
+  }
+  const expired: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) {
+      continue;
+    }
+    const filename = path.join(dir, entry.name);
+    const stats = fs.statSync(filename);
+    if (stats.mtimeMs < cutoffMs) {
+      expired.push(filename);
+    }
+  }
+  logger.info(`${dir}: ${expired.length} log files older than ${retentionMonths} months`);
+  if (expired.length === 0) {
+    return;
+  }
+  if (argv.verbose) {
+    logger.info({files: expired}, `${dir}: log files to be deleted`);
+  }
+  if (argv.dryrun) {
+    logger.info(`${dir}: --dryrun, skipping delete`);
+    return;
+  }
+  for (const filename of expired) {
+    fs.unlinkSync(filename);
+    logger.debug(`deleted ${filename}`);
+  }
+  logger.info(`${dir}: deleted ${expired.length} log files`);
 }
 
 async function pruneTable(db: MysqlDb, table: string, column: string) {
@@ -149,7 +192,8 @@ Options:
   --quiet          Quiet mode
   --verbose        Verbose mode
   --ini <file>     Use <file> for config (default /etc/hebcal-dot-com.ini)
-  --months <n>     Retention period in months (default ${RETENTION_MONTHS_DEFAULT})
+  --months <n>     Retention period in months (default ${RETENTION_MONTHS_DEFAULT}),
+                   applied to database rows and to log files in ${LOGDIR}
 `;
   console.log(usage);
 }

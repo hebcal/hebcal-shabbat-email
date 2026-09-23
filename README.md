@@ -66,10 +66,11 @@ dead addresses that `shabbat_bounce_sqs.js` merely recorded. Tunable via
 
 ### `data_retention.js` — purge old data
 
-Enforces the ≤ 2-year data-retention policy: deletes aged rows from the bounce,
-sent-log, and open-tracking tables, and purges long-inactive (pending /
-unsubscribed / bounced) subscribers. `--months <n>` overrides the retention
-window; `--dryrun` reports row counts without deleting.
+Enforces the 18-month data-retention policy: deletes aged rows from the bounce,
+sent-log, and open-tracking tables, purges long-inactive (pending /
+unsubscribed / bounced) subscribers, and deletes files in `/var/log/hebcal-email`
+whose mtime is older than the retention window. `--months <n>` overrides the
+retention window; `--dryrun` reports counts without deleting.
 
 ### `metrics_textfile.js` — refresh the current-state Prometheus gauges
 
