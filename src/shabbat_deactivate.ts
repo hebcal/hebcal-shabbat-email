@@ -62,7 +62,8 @@ async function deactivateSubs(db: MysqlDb, addrs: string[]) {
   SET deactivated=1 WHERE email_address IN('${emails}')`;
   await db.query(sql2);
   return new Promise((resolve, reject) => {
-    const subsPath = logdir + '/subscribers.log';
+    const currentMonth = new Date().toISOString().substring(0, 7);
+    const subsPath = logdir + '/subscribers-' + currentMonth + '.log';
     const t = Math.floor(Date.now() / 1000);
     try {
       const logStream = fs.createWriteStream(subsPath, {flags: 'a'});

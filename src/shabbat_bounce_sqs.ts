@@ -28,6 +28,7 @@ const config = readIniConfig(argv.ini);
 const metrics = new Metrics('shabbat_bounce_sqs', {logger});
 
 let logdir: string;
+const currentMonth = new Date().toISOString().substring(0, 7);
 
 const sqs = new SQSClient({
   region: 'us-east-1',
@@ -178,7 +179,7 @@ async function processBounceMessage(
 }
 
 async function readBounceQueue(sqs: SQSClient, db: MysqlDb) {
-  const bounceLogFilename = logdir + '/bounce-' + new Date().toISOString().substring(0, 7) + '.log';
+  const bounceLogFilename = logdir + '/bounce-' + currentMonth + '.log';
   const bounceLogStream = fs.createWriteStream(bounceLogFilename, {flags: 'a'});
   const queueURL = config['hebcal.aws.sns.email-bounce.url'];
   logger.info(`Bounces: fetching from ${queueURL}`);
@@ -239,7 +240,7 @@ async function processUnsubMessage(message: Message, db: MysqlDb, subsLogStream:
 }
 
 async function readUnsubQueue(sqs: SQSClient, db: MysqlDb) {
-  const subsLogFilename = logdir + '/subscribers.log';
+  const subsLogFilename = logdir + '/subscribers-' + currentMonth + '.log';
   const subsLogStream = fs.createWriteStream(subsLogFilename, {flags: 'a'});
   const queueURL = config['hebcal.aws.sns.email-unsub.url'];
   logger.info(`Unsubscribes: fetching from ${queueURL}`);
