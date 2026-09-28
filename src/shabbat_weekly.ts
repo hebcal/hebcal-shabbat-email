@@ -1,7 +1,6 @@
 import {
   CalOptions,
   Event,
-  flags,
   HebrewCalendar,
   HolidayEvent,
   Location,
@@ -424,7 +423,6 @@ type RenderedEvent = {
   title: string;
   /** HTML title, with typographic apostrophes. */
   title1: string;
-  mask: number;
   emoji: string | null;
 };
 
@@ -437,7 +435,7 @@ function appendTimedEvent(acc: BodyAccumulator, r: RenderedEvent, options: CalOp
   }
   const verb = desc === 'Candle lighting' || desc === 'Havdalah' ? ' is' : '';
   acc.body += `  ${r.title}${verb} at ${hourMin}\n`;
-  const emojiSuffix = r.mask & flags.CHANUKAH_CANDLES ? ` ${r.emoji}` : '';
+  const emojiSuffix = ev.hasFlag('CHANUKAH_CANDLES') ? ` ${r.emoji}` : '';
   acc.htmlBody += `<div style="${ITEM_STYLE}">${r.title1}${verb} at <strong>${hourMin}</strong>${emojiSuffix}</div>\n`;
 }
 
@@ -450,7 +448,7 @@ function appendParsha(acc: BodyAccumulator, r: RenderedEvent, options: CalOption
 
 function appendHoliday(acc: BodyAccumulator, r: RenderedEvent, options: CalOptions): void {
   const ev = r.ev as HolidayEvent;
-  if (r.dt.day() === 6 && !acc.sedra && (r.mask & flags.CHAG || ev.cholHaMoedDay)) {
+  if (r.dt.day() === 6 && !acc.sedra && (ev.hasFlag('CHAG') || ev.cholHaMoedDay)) {
     acc.sedra = ev.basename();
   }
   acc.body += `  ${r.title}\n`;
@@ -480,13 +478,12 @@ function genSubjectAndBody(
       dt: dayjs(ev.getDate().greg()),
       title,
       title1: title.replaceAll("'", '’'),
-      mask: ev.getFlags(),
       emoji: ev.getEmoji(),
     };
     appendDateHeader(acc, r.dt.format(FORMAT_DOW_MONTH_DAY));
     if (timed) {
       appendTimedEvent(acc, r, options);
-    } else if (r.mask === flags.PARSHA_HASHAVUA) {
+    } else if (ev.hasFlag('PARSHA_HASHAVUA')) {
       appendParsha(acc, r, options);
     } else {
       appendHoliday(acc, r, options);

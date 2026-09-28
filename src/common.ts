@@ -1,4 +1,4 @@
-import {Event, flags, HDate, HebrewCalendar} from '@hebcal/core';
+import {Event, HDate, HebrewCalendar} from '@hebcal/core';
 import {Dayjs} from 'dayjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -60,7 +60,7 @@ export function makeTransporter(iniConfig: Record<string, string>): Transporter 
 
 export function getChagOnDate(d: Dayjs): Event | undefined {
   const events = HebrewCalendar.getHolidaysOnDate(new HDate(d.toDate())) || [];
-  const chag = events.find(ev => ev.getFlags() & flags.CHAG);
+  const chag = events.find(ev => ev.hasFlag('CHAG'));
   return chag;
 }
 
