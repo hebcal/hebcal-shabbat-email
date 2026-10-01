@@ -41,11 +41,11 @@
     "oxlint": "^1.86.0",
     "prettier": "^3.9.9",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.3"
   },
   "dependencies": {
-    "@aws-sdk/client-sqs": "^3.1141.0",
-    "@hebcal/core": "^6.10.0",
+    "@aws-sdk/client-sqs": "^3.1144.0",
+    "@hebcal/core": "^6.11.0",
     "@hebcal/geo-sqlite": "^5.12.1",
     "@hebcal/hdate": "^0.22.8",
     "@hebcal/icalendar": "^7.0.5",
@@ -56,8 +56,8 @@
     "fs-ext": "^2.1.1",
     "html-to-text": "^10.0.1",
     "ini": "^7.0.0",
-    "mysql2": "^3.24.4",
-    "nodemailer": "^10.0.12",
+    "mysql2": "^3.24.5",
+    "nodemailer": "^10.0.13",
     "nodemailer-html-to-text": "^3.2.0",
     "pino": "^10.3.1"
   },
