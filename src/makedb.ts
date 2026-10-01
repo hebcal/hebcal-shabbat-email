@@ -23,7 +23,7 @@ export class MysqlDb {
     this.connection = connection;
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async query(sql: string, values?: any[]): Promise<RowDataPacket[]> {
+  query(sql: string, values?: any[]): Promise<RowDataPacket[]> {
     return new Promise((resolve, reject) => {
       const qopts: QueryOptions = {sql};
       if (values) {
@@ -38,7 +38,7 @@ export class MysqlDb {
       });
     });
   }
-  async close(): Promise<boolean> {
+  close(): Promise<boolean> {
     return new Promise((resolve, reject) => {
       this.connection.end(err => {
         if (err) {
@@ -70,7 +70,7 @@ export function makeDb(logger: Logger, iniConfig: Record<string, string>): Mysql
 /**
  * Returns directory name if it exists, else '.' for current working directory
  */
-export async function dirIfExistsOrCwd(dir: string): Promise<string> {
+export function dirIfExistsOrCwd(dir: string): Promise<string> {
   return new Promise(resolve => {
     fs.stat(dir, (err, stats) => {
       if (err) {

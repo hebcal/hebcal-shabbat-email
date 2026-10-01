@@ -268,7 +268,7 @@ async function readUnsubQueue(sqs: SQSClient, db: MysqlDb) {
   }
 }
 
-async function errorMail(emailAddress: string) {
+function errorMail(emailAddress: string) {
   const message = {
     from: 'Hebcal <shabbat-owner@hebcal.com>',
     to: emailAddress,
