@@ -10,6 +10,7 @@ import {Metrics} from './metrics.js';
 import {
   getLogLevel,
   getChagOnDate,
+  makeListMessage,
   makeTransporter,
   htmlToTextOptions,
   msleep,
@@ -459,19 +460,13 @@ as the Yahrzeit begins.`
   const prefix = isOther
     ? info.name
     : `Hebcal joins you in ${verb} ${info.name}, whose ${nth} ${typeStr}`;
-  const message: SendMailOptions = {
+  const message = makeListMessage({
     to: emailAddress,
-    from: 'Hebcal <shabbat-owner@hebcal.com>',
-    replyTo: 'no-reply@hebcal.com',
-    subject: subject,
-    messageId: `<${msgid}@hebcal.com>`,
-    headers: {
-      'Return-Path': returnPath,
-      'Errors-To': returnPath,
-      'List-ID': `<${info.id}.list-id.hebcal.com>`,
-      'List-Unsubscribe': `<${unsubUrl}&commit=1&cfg=json>`,
-      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-    },
+    subject,
+    msgid,
+    returnPath,
+    listId: `<${info.id}.list-id.hebcal.com>`,
+    listUnsubscribe: `<${unsubUrl}&commit=1&cfg=json>`,
     html: `<div style="font-size:18px;font-family:georgia,'times new roman',times,serif;">
 <div>${prefix} occurs on
 <time datetime="${observed.format('YYYY-MM-DD')}" ${DATE_STYLE}>${observed.format('dddd, MMMM D')}</time>,
@@ -492,7 +487,7 @@ ${BLANK}
 </div>
 ${imgOpen}
 `,
-  };
+  });
   if (isYahrzeit) {
     const dt = erev.toDate();
     const dow = erev.day();

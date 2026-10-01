@@ -16,6 +16,7 @@ import type {SendMailOptions, SentMessageInfo, Transporter} from 'nodemailer';
 import pino from 'pino';
 import {
   getLogLevel,
+  makeListMessage,
   makeTransporter,
   msleep,
   readIniConfig,
@@ -322,23 +323,16 @@ ${imgOpen}
   const unsubAddr = `shabbat-unsubscribe+${cfg.id}@hebcal.com`;
   const returnPath = 'shabbat-return+' + cfg.email.replace('@', '=') + '@hebcal.com';
   const unsub1click = `https://www.hebcal.com/email?em=${encodeURIComponent(cfg.email)}&unsubscribe=1&v=1&cfg=json`;
-  const message = {
-    from: 'Hebcal <shabbat-owner@hebcal.com>',
-    replyTo: 'no-reply@hebcal.com',
+  return makeListMessage({
     to: cfg.email,
     subject: subj,
-    messageId: `<${msgid}@hebcal.com>`,
-    headers: {
-      'Return-Path': returnPath,
-      'Errors-To': returnPath,
-      'List-Unsubscribe': `<${unsub1click}>, <mailto:${unsubAddr}?subject=unsubscribe>`,
-      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-      'List-Id': '<shabbat.hebcal.com>',
-    },
+    msgid,
+    returnPath,
+    listId: '<shabbat.hebcal.com>',
+    listUnsubscribe: `<${unsub1click}>, <mailto:${unsubAddr}?subject=unsubscribe>`,
     text: body,
     html: htmlBody,
-  };
-  return message;
+  });
 }
 
 let prevCfg: CandleConfig = {

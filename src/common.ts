@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import ini from 'ini';
 import nodemailer from 'nodemailer';
-import type {Transporter} from 'nodemailer';
+import type {SendMailOptions, Transporter} from 'nodemailer';
 
 export function getLogLevel(argv: {verbose?: boolean; quiet?: boolean}): string {
   if (argv.verbose) return 'debug';
@@ -56,6 +56,51 @@ export function makeTransporter(iniConfig: Record<string, string>): Transporter 
       rejectUnauthorized: false, // do not fail on invalid certs
     },
   });
+}
+
+export type ListMessageOptions = {
+  to: string;
+  subject: string;
+  /** local part of the Message-ID; `@hebcal.com` is appended */
+  msgid: string;
+  /** bounce address used for both Return-Path and Errors-To */
+  returnPath: string;
+  /** List-Id header value, including angle brackets */
+  listId: string;
+  /** List-Unsubscribe header value, including angle brackets */
+  listUnsubscribe: string;
+  html: string;
+  text?: string;
+};
+
+/**
+ * Builds a nodemailer message for a Hebcal mailing-list email (Shabbat
+ * weekly, Yahrzeit reminders) with the shared From, Reply-To, Message-ID,
+ * bounce and RFC 2369/8058 list headers.
+ */
+export function makeListMessage(opts: ListMessageOptions): SendMailOptions {
+  const message: SendMailOptions = {
+    from: 'Hebcal <shabbat-owner@hebcal.com>',
+    to: opts.to,
+    subject: opts.subject,
+    messageId: `<${opts.msgid}@hebcal.com>`,
+    headers: {
+      'Return-Path': opts.returnPath,
+      'Errors-To': opts.returnPath,
+      'List-Id': opts.listId,
+      'List-Unsubscribe': opts.listUnsubscribe,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
+    html: opts.html,
+  };
+  // No Reply-To for Apple "Hide My Email" relay addresses
+  if (!opts.to.toLowerCase().endsWith('privaterelay.appleid.com')) {
+    message.replyTo = 'no-reply@hebcal.com';
+  }
+  if (opts.text !== undefined) {
+    message.text = opts.text;
+  }
+  return message;
 }
 
 export function getChagOnDate(d: Dayjs): Event | undefined {

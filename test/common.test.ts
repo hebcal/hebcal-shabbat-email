@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import {
   getLogLevel,
+  makeListMessage,
   normalizeEmailAddress,
   shouldSendEmailToday,
   translateSmtpStatus,
@@ -69,5 +70,48 @@ describe('shouldSendEmailToday', () => {
     const thursday = dayjs('2026-08-06');
     expect(thursday.day()).toBe(4);
     expect(shouldSendEmailToday(thursday)).toBe(true);
+  });
+});
+
+describe('makeListMessage', () => {
+  const base = {
+    subject: 'Test',
+    msgid: 'abc123',
+    returnPath: 'shabbat-return+x=example.com@hebcal.com',
+    listId: '<shabbat.hebcal.com>',
+    listUnsubscribe: '<https://www.hebcal.com/email?unsubscribe=1>',
+    html: '<p>hi</p>',
+  };
+
+  it('builds common headers', () => {
+    const msg = makeListMessage({...base, to: 'user@example.com', text: 'hi'});
+    expect(msg).toEqual({
+      from: 'Hebcal <shabbat-owner@hebcal.com>',
+      replyTo: 'no-reply@hebcal.com',
+      to: 'user@example.com',
+      subject: 'Test',
+      messageId: '<abc123@hebcal.com>',
+      headers: {
+        'Return-Path': base.returnPath,
+        'Errors-To': base.returnPath,
+        'List-Id': '<shabbat.hebcal.com>',
+        'List-Unsubscribe': base.listUnsubscribe,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+      html: '<p>hi</p>',
+      text: 'hi',
+    });
+  });
+
+  it('omits text when not provided', () => {
+    const msg = makeListMessage({...base, to: 'user@example.com'});
+    expect(msg).not.toHaveProperty('text');
+  });
+
+  it('omits replyTo for Apple private relay addresses', () => {
+    const msg = makeListMessage({...base, to: 'xyz123@privaterelay.appleid.com'});
+    expect(msg).not.toHaveProperty('replyTo');
+    const msg2 = makeListMessage({...base, to: 'xyz123@PrivateRelay.AppleID.com'});
+    expect(msg2).not.toHaveProperty('replyTo');
   });
 });
