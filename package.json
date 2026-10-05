@@ -36,7 +36,7 @@
     "@types/fs-ext": "^2.0.3",
     "@types/html-to-text": "^9.0.4",
     "@types/ini": "^4.1.1",
-    "@types/node": "26.6.3",
+    "@types/node": "26.6.4",
     "@types/nodemailer-html-to-text": "^3.1.3",
     "oxlint": "^1.86.0",
     "prettier": "^3.9.9",
@@ -44,22 +44,22 @@
     "vitest": "^5.0.3"
   },
   "dependencies": {
-    "@aws-sdk/client-sqs": "^3.1144.0",
-    "@hebcal/core": "^6.11.0",
+    "@aws-sdk/client-sqs": "^3.1146.0",
+    "@hebcal/core": "^6.13.0",
     "@hebcal/geo-sqlite": "^5.12.1",
-    "@hebcal/hdate": "^0.22.8",
-    "@hebcal/icalendar": "^7.0.5",
+    "@hebcal/hdate": "^0.23.0",
+    "@hebcal/icalendar": "^7.0.6",
     "@hebcal/murmurhash3": "^1.0.0",
-    "@hebcal/rest-api": "^7.2.1",
+    "@hebcal/rest-api": "^7.3.0",
     "csv-parse": "^7.0.3",
     "dayjs": "^1.11.23",
     "fs-ext": "^2.1.1",
     "html-to-text": "^10.0.1",
     "ini": "^7.0.0",
     "mysql2": "^3.24.5",
-    "nodemailer": "^10.0.13",
+    "nodemailer": "^10.0.14",
     "nodemailer-html-to-text": "^3.2.0",
-    "pino": "^10.3.1"
+    "pino": "^10.4.0"
   },
   "overrides": {
     "deepmerge-ts": "^8.0.1"
