@@ -1,4 +1,4 @@
-import {Event, HDate, HebrewCalendar} from '@hebcal/core';
+import {Event, getHolidaysOnDate, HDate} from '@hebcal/core';
 import {Dayjs} from 'dayjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -104,9 +104,8 @@ export function makeListMessage(opts: ListMessageOptions): SendMailOptions {
 }
 
 export function getChagOnDate(d: Dayjs): Event | undefined {
-  const events = HebrewCalendar.getHolidaysOnDate(new HDate(d.toDate())) || [];
-  const chag = events.find(ev => ev.hasFlag('CHAG'));
-  return chag;
+  const events = getHolidaysOnDate(new HDate(d.toDate())) || [];
+  return events.find(ev => ev.hasFlag('CHAG'));
 }
 
 /**

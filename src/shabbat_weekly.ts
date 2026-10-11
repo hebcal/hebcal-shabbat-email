@@ -1,11 +1,4 @@
-import {
-  CalOptions,
-  Event,
-  HebrewCalendar,
-  HolidayEvent,
-  Location,
-  TimedEvent,
-} from '@hebcal/core';
+import {calendar, Location} from '@hebcal/core';
 import {GeoDb} from '@hebcal/geo-sqlite';
 import dayjs from 'dayjs';
 import fs from 'node:fs';
@@ -23,9 +16,19 @@ import {
   shouldSendEmailToday,
 } from './common.js';
 import {LOGDIR, dirIfExistsOrCwd, makeDb} from './makedb.js';
+import {makeCalOptions} from './calOptions.js';
 import {Metrics} from './metrics.js';
-import {getSpecialNote} from './specialNote.js';
+import {Announcement, DEFAULT_ANNOUNCEMENT_PATH, readAnnouncement} from './specialNote.js';
 import {urlEncodeAndTrack} from './tracking.js';
+import {
+  BLANK,
+  compareConfigs,
+  formatSentLogLine,
+  makeSubjectAndBody,
+  getStartAndEnd,
+  parseSentLog,
+  SubjectAndBody,
+} from './weeklyBody.js';
 import {RowDataPacket} from 'mysql2';
 
 const {values: argv, positionals} = parseArgs({
@@ -40,6 +43,7 @@ const {values: argv, positionals} = parseArgs({
     negative: {type: 'boolean'},
     date: {type: 'string'},
     ini: {type: 'string'},
+    announcement: {type: 'string'},
     sleeptime: {type: 'string'},
   },
   allowPositionals: true,
@@ -75,8 +79,8 @@ const midnightDt = midnight.toDate();
 const endOfWeekDt = endOfWeek.toDate();
 logger.debug(`start=${midnight.format('YYYY-MM-DD')}, endOfWeek=${endOfWeek.format('YYYY-MM-DD')}`);
 
-const FORMAT_DOW_MONTH_DAY = 'dddd, MMMM D';
 const geoDb = new GeoDb(null, 'zips.sqlite3', 'geonames.sqlite3');
+let announcement: Announcement | undefined;
 
 /**
  * Main event loop
@@ -84,6 +88,17 @@ const geoDb = new GeoDb(null, 'zips.sqlite3', 'geonames.sqlite3');
 async function main() {
   logger.info(`Reading ${argv.ini || 'default config'}...`);
   const config = readIniConfig(argv.ini);
+  // A broken announcement file shouldn't cost anyone their candle-lighting
+  // times, so log it and send without the announcement.
+  const announcementPath = argv.announcement || DEFAULT_ANNOUNCEMENT_PATH;
+  try {
+    announcement = readAnnouncement(announcementPath, TODAY0);
+  } catch (err) {
+    logger.error(err, `Ignoring announcement ${announcementPath}`);
+  }
+  if (announcement) {
+    logger.info(`Including announcement from ${announcementPath}`);
+  }
   const subs = await loadSubs(config, positionals);
   logger.info(`Loaded ${subs.size} users`);
 
@@ -126,26 +141,6 @@ async function main() {
         });
     });
   });
-}
-
-function compareConfigs(a: CandleConfig, b: CandleConfig): number {
-  const locA = a.location;
-  const locB = b.location;
-  const lonA = locA.getLongitude();
-  const lonB = locB.getLongitude();
-  if (lonA === lonB) {
-    const latA = locA.getLatitude();
-    const latB = locB.getLatitude();
-    if (latA === latB) {
-      const nameA = locA.getName()!;
-      const nameB = locB.getName()!;
-      return nameA.localeCompare(nameB);
-    } else {
-      return latA - latB;
-    }
-  } else {
-    return lonB - lonA;
-  }
 }
 
 async function mainInner(
@@ -213,37 +208,15 @@ type CandleConfig = {
 
 const dummyLocation = new Location(0, 0, false, 'UTC');
 
-type SubjectAndBody = [
-  subject: string,
-  body: string,
-  htmlBody: string,
-  specialNote: string,
-  specialNoteTxt: string,
-];
-
 /** Appends the sent-log line and reports whether the relay accepted it. */
 function writeLogLine(
   logStream: fs.WriteStream,
   cfg: CandleConfig,
   info: SentMessageInfo
 ): boolean {
-  const location = cfg.zip || cfg.geonameid || cfg.legacyCity;
-  const mid = info.messageId.substring(1, info.messageId.indexOf('@'));
-  const accepted = info.response?.startsWith('250') ?? false;
-  logStream.write(`${mid}:${Number(accepted)}:${cfg.email}:${location}\n`);
+  const [line, accepted] = formatSentLogLine(cfg, info);
+  logStream.write(line);
   return accepted;
-}
-
-/**
- * Gets start and end days for filtering relevant hebcal events
- */
-function getStartAndEnd(now: Date): [dayjs.Dayjs, dayjs.Dayjs] {
-  const midnight = dayjs(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
-  const dow = midnight.day();
-  const saturday = midnight.add(6 - dow, 'day');
-  const sixDaysAhead = midnight.add(6, 'day');
-  const endOfWeek = sixDaysAhead.isAfter(saturday) ? sixDaysAhead : saturday;
-  return [midnight, endOfWeek];
 }
 
 /**
@@ -360,138 +333,12 @@ function getSubjectAndBody(cfg: CandleConfig): SubjectAndBody {
   ) {
     return prevSubjAndBody;
   }
-  const options: CalOptions = {
-    start: midnightDt,
-    end: endOfWeekDt,
-    location: location,
-    candlelighting: true,
-    candleLightingMins: cfg.b,
-    il: location.getIsrael(),
-    sedrot: true,
-    shabbatMevarchim: true,
-    useElevation: cfg.ue,
-  };
-  if (typeof cfg.m === 'number') {
-    options.havdalahMins = cfg.m;
-  } else if (typeof cfg.td === 'number') {
-    options.havdalahDeg = cfg.td;
-  }
-  const events = HebrewCalendar.calendar(options);
-  const subjAndBody = genSubjectAndBody(events, options, cfg);
+  const options = makeCalOptions(cfg, midnightDt, endOfWeekDt);
+  const events = calendar(options);
+  const subjAndBody = makeSubjectAndBody(events, options, cfg, TODAY0, announcement);
   prevSubjAndBody = subjAndBody;
   prevCfg = cfg;
   return subjAndBody;
-}
-
-const BLANK = '<div>&nbsp;</div>';
-const ITEM_STYLE = 'padding-left:8px;margin-bottom:2px';
-
-/** Mutable text/HTML accumulator threaded through the per-event renderers. */
-type BodyAccumulator = {
-  body: string;
-  htmlBody: string;
-  firstCandles?: string;
-  sedra?: string;
-  prevStrtime?: string;
-};
-
-/** Emits the date sub-heading when we cross into a new calendar day. */
-function appendDateHeader(acc: BodyAccumulator, strtime: string): void {
-  if (strtime === acc.prevStrtime) {
-    return;
-  }
-  if (acc.htmlBody !== '') {
-    acc.htmlBody += `${BLANK}\n`;
-    acc.body += '\n';
-  }
-  acc.htmlBody += `<div style="font-size:14px;color:#941003;font-family:arial,helvetica,sans-serif">${strtime}</div>\n`;
-  acc.body += `${strtime}\n`;
-  acc.prevStrtime = strtime;
-}
-
-/** Per-event values derived once in the loop and shared by the renderers. */
-type RenderedEvent = {
-  ev: Event;
-  dt: dayjs.Dayjs;
-  /** Plain-text title. */
-  title: string;
-  /** HTML title, with typographic apostrophes. */
-  title1: string;
-  emoji: string | null;
-};
-
-function appendTimedEvent(acc: BodyAccumulator, r: RenderedEvent, options: CalOptions): void {
-  const ev = r.ev as TimedEvent;
-  const desc = ev.getDesc();
-  const hourMin = HebrewCalendar.reformatTimeStr(ev.eventTimeStr, 'pm', options);
-  if (!acc.firstCandles && desc === 'Candle lighting') {
-    acc.firstCandles = hourMin;
-  }
-  const verb = desc === 'Candle lighting' || desc === 'Havdalah' ? ' is' : '';
-  acc.body += `  ${r.title}${verb} at ${hourMin}\n`;
-  const emojiSuffix = ev.hasFlag('CHANUKAH_CANDLES') ? ` ${r.emoji}` : '';
-  acc.htmlBody += `<div style="${ITEM_STYLE}">${r.title1}${verb} at <strong>${hourMin}</strong>${emojiSuffix}</div>\n`;
-}
-
-function appendParsha(acc: BodyAccumulator, r: RenderedEvent, options: CalOptions): void {
-  acc.sedra = r.title.substring(r.title.indexOf(' ') + 1);
-  acc.body += `  Torah portion: ${r.title}\n`;
-  const url2 = urlEncodeAndTrack(r.ev.url()!, options.il);
-  acc.htmlBody += `<div style="${ITEM_STYLE}">Torah portion: <a href="${url2}">${r.title1}</a></div>\n`;
-}
-
-function appendHoliday(acc: BodyAccumulator, r: RenderedEvent, options: CalOptions): void {
-  const ev = r.ev as HolidayEvent;
-  if (r.dt.day() === 6 && !acc.sedra && (ev.hasFlag('CHAG') || ev.cholHaMoedDay)) {
-    acc.sedra = ev.basename();
-  }
-  acc.body += `  ${r.title}\n`;
-  const url = ev.url();
-  acc.htmlBody += `<div style="${ITEM_STYLE}">`;
-  if (url) {
-    const url2 = urlEncodeAndTrack(url, options.il);
-    acc.htmlBody += `<a href="${url2}">${r.title1}</a>`;
-  } else {
-    acc.htmlBody += r.title1;
-  }
-  const emojiSuffix = r.emoji ? ` ${r.emoji}` : '';
-  acc.htmlBody += `${emojiSuffix}</div>\n`;
-}
-
-function genSubjectAndBody(
-  events: Event[],
-  options: CalOptions,
-  cfg: CandleConfig
-): SubjectAndBody {
-  const acc: BodyAccumulator = {body: '', htmlBody: ''};
-  for (const ev of events) {
-    const timed = Boolean((ev as TimedEvent).eventTime);
-    const title = timed ? ev.renderBrief(options.locale) : ev.render(options.locale);
-    const r: RenderedEvent = {
-      ev,
-      dt: dayjs(ev.getDate().greg()),
-      title,
-      title1: title.replaceAll("'", '’'),
-      emoji: ev.getEmoji(),
-    };
-    appendDateHeader(acc, r.dt.format(FORMAT_DOW_MONTH_DAY));
-    if (timed) {
-      appendTimedEvent(acc, r, options);
-    } else if (ev.hasFlag('PARSHA_HASHAVUA')) {
-      appendParsha(acc, r, options);
-    } else {
-      appendHoliday(acc, r, options);
-    }
-  }
-  const shortLocation = cfg.location.getShortName();
-  let subject = '🕯️';
-  if (acc.sedra) subject += ` ${acc.sedra} -`;
-  subject += ' ' + shortLocation;
-  if (acc.firstCandles) subject += ` candles ${acc.firstCandles}`;
-
-  const [specialNoteTxt, specialNote] = getSpecialNote(cfg, TODAY0);
-
-  return [subject, acc.body, acc.htmlBody, specialNote, specialNoteTxt];
 }
 
 const UTM_CAMPAIGN = '&utm_campaign=shabbat-weekly';
@@ -558,21 +405,14 @@ function makeCandlesCfg(row: RowDataPacket): CandleConfig | null {
  * Reads the previous log and returns any successful email adresses to skip
  */
 function loadSentLog(sentLogFilename: string): Set<string> {
-  const result = new Set<string>();
-  let lines;
+  let contents;
   try {
-    lines = fs.readFileSync(sentLogFilename, 'utf-8').split('\n');
+    contents = fs.readFileSync(sentLogFilename, 'utf-8');
   } catch (error) {
     logger.info(`No ${sentLogFilename} logfile from prior run: ${error}`);
-    return result; // no previous run to scan
+    return new Set<string>(); // no previous run to scan
   }
-  for (const line of lines) {
-    const [, status, to] = line.split(':');
-    if (+status && to) {
-      result.add(to);
-    }
-  }
-  return result;
+  return parseSentLog(contents);
 }
 
 function getLocation(cfg: CandleConfig): Location | null {
@@ -656,6 +496,9 @@ Options:
   --sleeptime <n>  Sleep <n> milliseconds between email (default 300)
   --force          Run even if it's not Thursday
   --ini <file>     Use non-default hebcal-dot-com.ini
+  --announcement <file>
+                   Read optional announcement JSON from <file>
+                     (default ${DEFAULT_ANNOUNCEMENT_PATH})
 `;
   console.log(usage);
 }

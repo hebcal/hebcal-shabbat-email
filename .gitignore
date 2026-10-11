@@ -102,3 +102,7 @@ dist
 
 # TernJS port file
 .tern-port
+
+hebcal-dot-com.ini
+geonames.sqlite3
+zips.sqlite3

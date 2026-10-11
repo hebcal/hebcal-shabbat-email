@@ -1,6 +1,7 @@
 import {HDate, Location, months} from '@hebcal/core';
 import dayjs, {Dayjs} from 'dayjs';
 import {htmlToText} from 'html-to-text';
+import fs from 'node:fs';
 import {htmlToTextOptions} from './common.js';
 import {urlEncodeAndTrack} from './tracking.js';
 
@@ -138,7 +139,76 @@ ${when} on ${strtime}.`;
 }
 
 /**
- * Builds the seasonal greeting note in both plain-text and HTML form.
+ * A brief, temporary non-holiday announcement read from a file on disk, so it
+ * can be added to (and removed from) the weekly email without a code change.
+ */
+export type Announcement = {
+  /** HTML fragment; links and entities must already be escaped */
+  html: string;
+  /** optional plain-text version; derived from `html` when omitted */
+  text?: string;
+  /** first date (inclusive, `YYYY-MM-DD`) to include the announcement */
+  start?: string;
+  /** last date (inclusive, `YYYY-MM-DD`) to include the announcement */
+  end?: string;
+};
+
+export const DEFAULT_ANNOUNCEMENT_PATH = '/etc/hebcal-shabbat-announcement.json';
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Reads the optional announcement JSON file.
+ *
+ * @returns `undefined` if the file does not exist or `today` falls outside
+ *   its `start`/`end` window
+ * @throws if the file exists but is unreadable, not valid JSON, or malformed
+ */
+export function readAnnouncement(filename: string, today: Dayjs): Announcement | undefined {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(filename, 'utf-8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return undefined;
+    }
+    throw err;
+  }
+  const obj = JSON.parse(raw) as Partial<Announcement>;
+  if (typeof obj?.html !== 'string' || obj.html.trim() === '') {
+    throw new Error(`${filename}: missing required "html" string`);
+  }
+  for (const key of ['text', 'start', 'end'] as const) {
+    if (obj[key] !== undefined && typeof obj[key] !== 'string') {
+      throw new Error(`${filename}: "${key}" must be a string`);
+    }
+  }
+  for (const key of ['start', 'end'] as const) {
+    if (obj[key] !== undefined && !ISO_DATE.test(obj[key])) {
+      throw new Error(`${filename}: "${key}" must be YYYY-MM-DD`);
+    }
+  }
+  const ymd = today.format('YYYY-MM-DD');
+  if ((obj.start && ymd < obj.start) || (obj.end && ymd > obj.end)) {
+    return undefined;
+  }
+  return obj as Announcement;
+}
+
+/** Renders an announcement as a `[text, html]` pair, styled apart from seasonal notes. */
+function renderAnnouncement(announcement: Announcement): [string, string] {
+  const text =
+    (announcement.text ?? htmlToText(announcement.html, htmlToTextOptions)).trim() + '\n\n';
+  const html =
+    '<div style="font-size:14px;font-family:arial,helvetica,sans-serif;padding:8px;color:#31708f;background-color:#d9edf7;border-color:#bce8f1;border-radius:4px">\n' +
+    announcement.html.trim() +
+    `\n</div>\n${BLANK}\n`;
+  return [text, html];
+}
+
+/**
+ * Builds the seasonal greeting note in both plain-text and HTML form,
+ * followed by the optional announcement.
  *
  * The date logic runs a single time; only the holiday URLs differ between
  * the two output formats, so each matching branch supplies a builder that
@@ -146,7 +216,20 @@ ${when} on ${strtime}.`;
  *
  * @returns a `[text, html]` pair, both empty strings when there is no note
  */
-export function getSpecialNote(cfg: SpecialNoteConfig, today: Dayjs): [string, string] {
+export function getSpecialNote(
+  cfg: SpecialNoteConfig,
+  today: Dayjs,
+  announcement?: Announcement
+): [string, string] {
+  const [seasonalText, seasonalHtml] = getSeasonalNote(cfg, today);
+  if (!announcement) {
+    return [seasonalText, seasonalHtml];
+  }
+  const [text, html] = renderAnnouncement(announcement);
+  return [seasonalText + text, seasonalHtml + html];
+}
+
+function getSeasonalNote(cfg: SpecialNoteConfig, today: Dayjs): [string, string] {
   const hd = new HDate(today.toDate());
   const yy = hd.getFullYear();
   const gy = today.year();

@@ -1,7 +1,15 @@
 import {HDate, Location, months} from '@hebcal/core';
 import dayjs from 'dayjs';
-import {describe, expect, it} from 'vitest';
-import {getSpecialNote, SpecialNoteConfig} from '../src/specialNote.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {afterAll, describe, expect, it} from 'vitest';
+import {
+  Announcement,
+  getSpecialNote,
+  readAnnouncement,
+  SpecialNoteConfig,
+} from '../src/specialNote.js';
 
 const diaspora = new Location(
   40.09,
@@ -92,5 +100,79 @@ describe('getSpecialNote', () => {
     const [text, html] = getSpecialNote(makeCfg({location: israel}), hd(3, months.TISHREI, 5787));
     expect(text).toContain('?i=on');
     expect(html).toContain('i=on');
+  });
+});
+
+describe('getSpecialNote with an announcement', () => {
+  const announcement: Announcement = {
+    html: 'Hebcal for Apple Watch now includes candle-lighting times. <a href="https://apps.apple.com/us/app/hebcal-hebrew-calendar/id1582733315">Download from the App Store</a> today!',
+  };
+
+  it('renders the announcement alone when there is no seasonal note', () => {
+    const [text, html] = getSpecialNote(makeCfg(), hd(1, months.CHESHVAN, 5787), announcement);
+    expect(html).toContain('background-color:#d9edf7');
+    expect(html).toContain(
+      'href="https://apps.apple.com/us/app/hebcal-hebrew-calendar/id1582733315"'
+    );
+    expect(html.trimEnd().endsWith('<div>&nbsp;</div>')).toBe(true);
+    expect(text).toContain('Hebcal for Apple Watch');
+    expect(text).toContain('https://apps.apple.com/us/app/hebcal-hebrew-calendar/id1582733315');
+    expect(text.endsWith('\n\n')).toBe(true);
+  });
+
+  it('appends the announcement after the seasonal note', () => {
+    const [text, html] = getSpecialNote(makeCfg(), hd(3, months.TISHREI, 5787), announcement);
+    expect(text.indexOf('G’mar Chatima Tova!')).toBeLessThan(
+      text.indexOf('Hebcal for Apple Watch')
+    );
+    expect(html.indexOf('#dff0d8')).toBeLessThan(html.indexOf('#d9edf7'));
+  });
+
+  it('prefers an explicit plain-text version', () => {
+    const [text] = getSpecialNote(makeCfg(), hd(1, months.CHESHVAN, 5787), {
+      ...announcement,
+      text: 'Plain text only',
+    });
+    expect(text).toBe('Plain text only\n\n');
+  });
+});
+
+describe('readAnnouncement', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'announcement-'));
+  afterAll(() => fs.rmSync(dir, {recursive: true, force: true}));
+  const today = dayjs('2026-10-15');
+
+  function write(name: string, contents: string): string {
+    const filename = path.join(dir, name);
+    fs.writeFileSync(filename, contents);
+    return filename;
+  }
+
+  it('returns undefined when the file does not exist', () => {
+    expect(readAnnouncement(path.join(dir, 'nope.json'), today)).toBeUndefined();
+  });
+
+  it('reads a minimal announcement', () => {
+    const filename = write('min.json', JSON.stringify({html: 'Hello'}));
+    expect(readAnnouncement(filename, today)).toEqual({html: 'Hello'});
+  });
+
+  it('honors an inclusive start/end window', () => {
+    const filename = write(
+      'window.json',
+      JSON.stringify({html: 'Hello', start: '2026-10-15', end: '2026-10-22'})
+    );
+    expect(readAnnouncement(filename, dayjs('2026-10-14'))).toBeUndefined();
+    expect(readAnnouncement(filename, dayjs('2026-10-15'))?.html).toBe('Hello');
+    expect(readAnnouncement(filename, dayjs('2026-10-22'))?.html).toBe('Hello');
+    expect(readAnnouncement(filename, dayjs('2026-10-23'))).toBeUndefined();
+  });
+
+  it('rejects malformed files', () => {
+    expect(() => readAnnouncement(write('bad.json', '{html:'), today)).toThrow();
+    expect(() => readAnnouncement(write('nohtml.json', '{"text":"x"}'), today)).toThrow(/html/);
+    expect(() =>
+      readAnnouncement(write('baddate.json', '{"html":"x","end":"10/22/2026"}'), today)
+    ).toThrow(/YYYY-MM-DD/);
   });
 });
