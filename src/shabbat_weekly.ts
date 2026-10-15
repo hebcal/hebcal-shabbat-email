@@ -79,7 +79,9 @@ const midnightDt = midnight.toDate();
 const endOfWeekDt = endOfWeek.toDate();
 logger.debug(`start=${midnight.format('YYYY-MM-DD')}, endOfWeek=${endOfWeek.format('YYYY-MM-DD')}`);
 
-const geoDb = new GeoDb(null, 'zips.sqlite3', 'geonames.sqlite3');
+const geoDb = new GeoDb(null, 'zips.sqlite3', 'geonames.sqlite3', {
+  geonamesPollInterval: 0,
+});
 let announcement: Announcement | undefined;
 
 /**
