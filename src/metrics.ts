@@ -159,7 +159,7 @@ export const METRICS: Record<string, MetricDef> = {
   // ---- shabbat_deactivate.js ----------------------------------------------
   hebcal_email_deactivated_total: {
     type: 'counter',
-    help: 'Subscriptions deactivated for chronic bouncing, counted once per address and attributed to the bounce reason that tripped the threshold.',
+    help: 'Subscriptions deactivated for chronic bouncing (hard reasons by count, over_quota/Transient by distinct weeks), counted once per address and attributed to the bounce reason that tripped the threshold.',
   },
   hebcal_email_deactivate_candidates: {
     type: 'gauge',
@@ -187,7 +187,11 @@ export const METRICS: Record<string, MetricDef> = {
   },
   hebcal_email_bounces_pending_deactivation: {
     type: 'gauge',
-    help: 'Bounce rows from the last 365 days that have not been deactivated yet, by std_reason -- the pool shabbat_deactivate.js scans.',
+    help: 'Distinct addresses with a bounce in the last 365 days not yet deactivated, by std_reason. Includes addresses below the deactivation thresholds; see hebcal_email_deactivate_eligible.',
+  },
+  hebcal_email_deactivate_eligible: {
+    type: 'gauge',
+    help: 'Addresses the next shabbat_deactivate.js run would deactivate at default thresholds, by the reason that would trip it.',
   },
 };
 

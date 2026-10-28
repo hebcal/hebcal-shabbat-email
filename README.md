@@ -58,11 +58,21 @@ frequently (every few minutes) to keep the queues drained.
 
 ### `shabbat_deactivate.js` — deactivate chronically-bouncing addresses
 
-Scans recent bounces and deactivates subscriptions whose address has bounced
-too many times (or was flagged for abuse). This is what actually stops mail to
-dead addresses that `shabbat_bounce_sqs.js` merely recorded. Tunable via
-`--count <n>` (bounce threshold, default 7) and `--reasons <list>`
-(comma-separated bounce reasons to act on).
+Scans the last 365 days of bounces and deactivates subscriptions whose address
+is chronically undeliverable. This is what actually stops mail to dead addresses
+that `shabbat_bounce_sqs.js` merely recorded. There are two rules:
+
+- **Hard bounces** (`--reasons`, default
+  `amzn_abuse,user_unknown,user_disabled,domain_error,spam`): more than
+  `--count <n>` bounces (default 7), or any `amzn_abuse`.
+- **Soft bounces** (`--soft-reasons`, default `over_quota,Transient`): judged on
+  persistence rather than row count, since one burst of sends can leave hundreds
+  of rows in an hour. The address must have bounced in at least
+  `--soft-weeks` distinct weeks (default 8), spanning at least
+  `--soft-span-days` (default 60), with the most recent within
+  `--soft-recent-days` (default 30).
+
+Pass `none` to either reasons option to switch that rule off.
 
 ### `data_retention.js` — purge old data
 
@@ -77,7 +87,8 @@ retention window; `--dryrun` reports counts without deleting.
 Not on cron: driven by a systemd timer every 15 minutes (see
 [Metrics](#metrics)). Queries MySQL for the numbers that are properties of the
 database rather than of any one job — subscriber counts per list and status, the
-size of the bounce table, and the un-actioned bounce backlog by `std_reason` —
+size of the bounce table, the un-actioned bounce backlog (distinct addresses) by
+`std_reason`, and how many of those the next deactivation run would act on —
 and rewrites the `.prom` file the other scripts also write.
 
 ## Maintenance scripts (not on cron)
@@ -154,6 +165,7 @@ hour-long weekly send — cannot produce a partial file.
 | `hebcal_email_subscribers`                        | gauge   | `list`, `status`                          |
 | `hebcal_email_bounce_table_rows`                  | gauge   | —                                         |
 | `hebcal_email_bounces_pending_deactivation`       | gauge   | `reason`                                  |
+| `hebcal_email_deactivate_eligible`                | gauge   | `reason`                                  |
 
 `src/metrics.ts` holds the catalog, and a metric name that is not in it is never
 written — that is what keeps a typo from quietly becoming a new time series.

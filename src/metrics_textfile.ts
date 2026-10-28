@@ -3,6 +3,7 @@ import {parseArgs} from 'node:util';
 import {makeDb, MysqlDb} from './makedb.js';
 import {getLogLevel, readIniConfig} from './common.js';
 import {Metrics} from './metrics.js';
+import {BOUNCE_WINDOW_DAYS, DEFAULT_OPTIONS, getCandidates} from './deactivate.js';
 
 /**
  * metrics_textfile.js -- refreshes the current-state gauges that no cron job is
@@ -47,9 +48,6 @@ const BOUNCE_REASONS = [
   'domain_error',
   'unset',
 ];
-
-/** Matches the DATEDIFF(...) < 365 window shabbat_deactivate.js scans. */
-const BOUNCE_WINDOW_DAYS = 365;
 
 const {values: argv} = parseArgs({
   options: {
@@ -110,9 +108,15 @@ async function subscriberGauges(
 }
 
 /**
- * Table size, plus the un-actioned backlog by reason. The second query is the
- * same scan shabbat_deactivate.js does twice a week, so this gauge is a live
- * preview of what its next run will find.
+ * Table size, plus the un-actioned backlog by reason, plus what the next
+ * shabbat_deactivate.js run would actually deactivate.
+ *
+ * The backlog counts distinct addresses, not rows. Rows overstate it badly: a
+ * soft-bouncing address piles up one row a week for as long as it stays
+ * subscribed, and one address hit by a burst of sends can contribute hundreds
+ * in an hour. The eligible gauge runs the deactivator's own candidate query
+ * (default thresholds), so backlog minus eligible is what is bouncing but not
+ * yet bad enough to act on.
  */
 async function bounceGauges(db: MysqlDb) {
   const totalRows = await db.query('SELECT COUNT(*) AS cnt FROM hebcal_shabbat_bounce');
@@ -120,8 +124,10 @@ async function bounceGauges(db: MysqlDb) {
 
   for (const reason of BOUNCE_REASONS) {
     metrics.setGauge('hebcal_email_bounces_pending_deactivation', {reason}, 0);
+    metrics.setGauge('hebcal_email_deactivate_eligible', {reason}, 0);
   }
-  const sql = `SELECT COALESCE(std_reason, 'unset') AS reason, COUNT(*) AS cnt
+  const sql = `SELECT COALESCE(std_reason, 'unset') AS reason,
+COUNT(DISTINCT email_address) AS cnt
 FROM hebcal_shabbat_bounce
 WHERE deactivated = 0
 AND DATEDIFF(NOW(), timestamp) < ${BOUNCE_WINDOW_DAYS}
@@ -134,6 +140,14 @@ GROUP BY reason`;
       {reason: String(row.reason)},
       Number(row.cnt)
     );
+  }
+
+  const eligible = new Map<string, number>();
+  for (const reason of (await getCandidates(db, DEFAULT_OPTIONS)).values()) {
+    eligible.set(reason, (eligible.get(reason) ?? 0) + 1);
+  }
+  for (const [reason, cnt] of eligible) {
+    metrics.setGauge('hebcal_email_deactivate_eligible', {reason}, cnt);
   }
 }
 
