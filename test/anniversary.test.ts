@@ -9,6 +9,7 @@ import {
   getMaxYahrzeitId,
   getThisHebrewYear,
   getYahrzeitDetailForId,
+  includeAnniversaryNumber,
   lightCandlesWhen,
   makeMessage,
   makeSubject,
@@ -294,5 +295,41 @@ describe('makeMessage', () => {
     const info = makeInfo({x1: '2010-04-07'});
     info.emailAddress = 'abc@privaterelay.appleid.com';
     expect(makeMessage(info)).not.toHaveProperty('replyTo');
+  });
+});
+
+describe('anniversary numbers (an)', () => {
+  it('includeAnniversaryNumber is on unless explicitly off', () => {
+    expect(includeAnniversaryNumber({})).toBe(true);
+    expect(includeAnniversaryNumber({an: 'on'})).toBe(true);
+    expect(includeAnniversaryNumber({an: 'off'})).toBe(false);
+    expect(includeAnniversaryNumber({an: '0'})).toBe(false);
+    expect(includeAnniversaryNumber({an: 0})).toBe(false);
+  });
+
+  it('getYahrzeitDetailForId carries the setting from the calendar', () => {
+    expect(getYahrzeitDetailForId({x1: '2010-03-15'}, 1)!.includeNumber).toBe(true);
+    expect(getYahrzeitDetailForId({x1: '2010-03-15', an: 'off'}, 1)!.includeNumber).toBe(false);
+  });
+
+  it('omits the number from a Yahrzeit email and its invite when an=off', () => {
+    const msg = makeMessage(makeInfo({x1: '2010-04-07', n1: 'Sarah', t1: 'Yahrzeit', an: 'off'}));
+    expect(msg.html).toContain('Hebcal joins you in remembering Sarah, whose Yahrzeit occurs on');
+    expect(msg.html).not.toContain('17th');
+    const content = (msg.attachments![0].content as string).replaceAll('\r\n ', '');
+    expect(content).toContain('whose Yahrzeit occurs on');
+    expect(content).not.toContain('17th');
+  });
+
+  it('omits the number from a Birthday email when an=off', () => {
+    const msg = makeMessage(
+      makeInfo({x1: '1990-12-05', s1: 'on', t1: 'Birthday', n1: 'Noam', an: 'off'})
+    );
+    expect(msg.html).toContain('Hebcal joins you in honoring Noam, whose Hebrew Birthday occurs');
+  });
+
+  it('omits the number from an Anniversary email when an=off', () => {
+    const msg = makeMessage(makeInfo({x1: '2001-06-20', t1: 'Anniversary', n1: 'Sam', an: 'off'}));
+    expect(msg.html).toContain('Hebcal joins you in honoring Sam, whose Hebrew Anniversary occurs');
   });
 });

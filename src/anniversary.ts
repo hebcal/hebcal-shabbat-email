@@ -27,6 +27,8 @@ export type SubBase = {
   name: string;
   day: dayjs.Dayjs;
   hash: string;
+  /** include the anniversary number (e.g. "17th") in the email */
+  includeNumber: boolean;
 };
 
 export type SubInfo = SubBase & {
@@ -118,7 +120,7 @@ as the Yahrzeit begins.`
     : '';
   const hebdate = info.hd!.render('en');
   const origDt = info.day.toDate();
-  const nth = calculateAnniversaryNth(origDt, info.hyear);
+  const nth = info.includeNumber ? calculateAnniversaryNth(origDt, info.hyear) + ' ' : '';
   const msgid = `${info.anniversaryId}.${Date.now().toString(36)}`;
   const returnPath = `yahrzeit-return+${info.id}.${info.hash}.${info.num}@hebcal.com`;
   const urlBase = 'https://www.hebcal.com/yahrzeit';
@@ -129,7 +131,7 @@ as the Yahrzeit begins.`
   const imgOpen = `<img src="https://www.hebcal.com/email/open?msgid=${msgid}&amp;loc=${type}&amp;${UTM_PARAM}" alt="" width="1" height="1" border="0" style="height:1px!important;width:1px!important;border-width:0!important;margin-top:0!important;margin-bottom:0!important;margin-right:0!important;margin-left:0!important;padding-top:0!important;padding-bottom:0!important;padding-right:0!important;padding-left:0!important">`;
   const prefix = isOther
     ? info.name
-    : `Hebcal joins you in ${verb} ${info.name}, whose ${nth} ${typeStr}`;
+    : `Hebcal joins you in ${verb} ${info.name}, whose ${nth}${typeStr}`;
   const message = makeListMessage({
     to: emailAddress,
     subject,
@@ -171,7 +173,7 @@ ${imgOpen}
       eventTime: dt,
       eventTimeStr,
       memo:
-        `Hebcal joins you in ${verb} ${info.name}, whose ${nth} ${typeStr} occurs on ` +
+        `Hebcal joins you in ${verb} ${info.name}, whose ${nth}${typeStr} occurs on ` +
         `${observed.format('dddd, MMMM D')}, corresponding to the ${hebdate}.\\n\\n` +
         `${typeStr} begins at sundown on ${erev.format('dddd, MMMM D')} and continues until ` +
         'sundown on the day of observance. ' +
@@ -229,6 +231,18 @@ export function makeSubject(type: string, observed: dayjs.Dayjs): string {
       ? `${erevMon} ${erevDay}-${obsDay}`
       : `${erevMon} ${erevDay}-${obsMon} ${obsDay}`;
   return `${type} Observance for ${dateRange}`;
+}
+
+/**
+ * Whether to include the anniversary number (e.g. "17th Yahrzeit").
+ * On unless explicitly turned off: calendars saved before hebcal-web's
+ * "Include anniversary numbers" checkbox existed have no `an` key at all,
+ * and hebcal-web stores only the non-default `an: 'off'`.
+ * Mirrors includeAnniversaryNumber() in hebcal-web's yahrzeitCommon.js.
+ */
+export function includeAnniversaryNumber(query: RawYahrzeitContents): boolean {
+  const an = query.an;
+  return an !== 'off' && an !== '0' && an !== 0;
 }
 
 function empty(val: unknown): boolean {
@@ -300,7 +314,8 @@ export function getYahrzeitDetailForId(
     day = day.add(1, 'day');
   }
   const hash = murmur32HexSync([day.format('YYYY-MM-DD'), type].join('-'));
-  return {num, dd, mm, yy, sunset, type, name, day, hash};
+  const includeNumber = includeAnniversaryNumber(query);
+  return {num, dd, mm, yy, sunset, type, name, day, hash, includeNumber};
 }
 
 export function getAnniversaryName(query: RawYahrzeitContents, id: number, type: string): string {
